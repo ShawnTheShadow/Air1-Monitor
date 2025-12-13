@@ -681,14 +681,14 @@ impl App for Air1App {
                     ui,
                     "Temperature",
                     self.metrics.temp,
-                    "°C",
+                    "°F",
                     &[
-                        (0.0, 18.0, "Cool"),
-                        (18.0, 24.0, "Comfortable"),
-                        (24.0, 28.0, "Warm"),
-                        (28.0, 40.0, "Hot"),
+                        (32.0, 64.0, "Cool"),
+                        (64.0, 75.0, "Comfortable"),
+                        (75.0, 82.0, "Warm"),
+                        (82.0, 104.0, "Hot"),
                     ],
-                    40.0,
+                    104.0,
                 );
                 self.gauge_card(
                     ui,
