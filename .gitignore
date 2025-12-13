@@ -19,3 +19,4 @@ desktop.ini
 *.log
 .env
 config.local.toml
+.github/act-history.json
