@@ -252,11 +252,11 @@ impl Air1App {
             ("Air Quality Unknown", egui::Color32::GRAY, "?")
         };
 
-        let frame = egui::Frame::none()
+        let frame = egui::Frame::default()
             .fill(quality_color.linear_multiply(0.15))
             .stroke(egui::Stroke::new(2.0, quality_color))
-            .rounding(egui::Rounding::same(8.0))
-            .inner_margin(egui::Margin::symmetric(16.0, 12.0));
+            .corner_radius(egui::CornerRadius::same(8))
+            .inner_margin(egui::Margin::symmetric(16, 12));
 
         frame.show(ui, |ui| {
             ui.horizontal(|ui| {
@@ -324,7 +324,7 @@ impl Air1App {
             ui.label("Host");
             ui.text_edit_singleline(&mut self.cfg.mqtt.host);
             ui.label("Port");
-            ui.add(egui::DragValue::new(&mut self.cfg.mqtt.port).clamp_range(1..=65535));
+            ui.add(egui::DragValue::new(&mut self.cfg.mqtt.port).range(1..=65535));
         });
 
         ui.horizontal(|ui| {
@@ -399,9 +399,9 @@ impl Air1App {
 
         ui.horizontal(|ui| {
             ui.label("QoS");
-            ui.add(egui::DragValue::new(&mut self.cfg.mqtt.qos).clamp_range(0..=2));
+            ui.add(egui::DragValue::new(&mut self.cfg.mqtt.qos).range(0..=2));
             ui.label("Keepalive (s)");
-            ui.add(egui::DragValue::new(&mut self.cfg.mqtt.keepalive_secs).clamp_range(5..=1200));
+            ui.add(egui::DragValue::new(&mut self.cfg.mqtt.keepalive_secs).range(5..=1200));
         });
 
         ui.horizontal(|ui| {
@@ -721,11 +721,11 @@ impl Air1App {
         let card_width = 200.0;
         let gauge_size = 140.0;
         
-        let card = egui::Frame::none()
+        let card = egui::Frame::default()
             .fill(egui::Color32::from_gray(25))
             .stroke(egui::Stroke::new(2.0, egui::Color32::from_gray(50)))
-            .rounding(egui::Rounding::same(12.0))
-            .inner_margin(egui::Margin::same(16.0));
+            .corner_radius(egui::CornerRadius::same(12))
+            .inner_margin(egui::Margin::same(16));
             
         card.show(ui, |ui| {
             ui.set_width(card_width);
