@@ -174,9 +174,11 @@ fn tls_config(ca_path: Option<&Path>) -> Result<TlsConfiguration> {
             anyhow::bail!("no CA certs added from {}", path.display());
         }
     } else {
-        let native =
-            rustls_native_certs::load_native_certs().context("failed to load native certs")?;
-        let (added, _skipped) = roots.add_parsable_certificates(native);
+        let native_result = rustls_native_certs::load_native_certs();
+        if !native_result.errors.is_empty() && native_result.certs.is_empty() {
+            anyhow::bail!("failed to load native certs: {:?}", native_result.errors);
+        }
+        let (added, _skipped) = roots.add_parsable_certificates(native_result.certs);
         if added == 0 {
             anyhow::bail!("no native certificates available");
         }
