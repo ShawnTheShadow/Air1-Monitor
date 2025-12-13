@@ -7,7 +7,10 @@ use std::{
 };
 
 use anyhow::{Context, Result};
-use rumqttc::tokio_rustls::rustls::{ClientConfig, RootCertStore, pki_types::{CertificateDer, pem::PemObject}};
+use rumqttc::tokio_rustls::rustls::{
+    ClientConfig, RootCertStore,
+    pki_types::{CertificateDer, pem::PemObject},
+};
 use rumqttc::{Client, Event, MqttOptions, Packet, QoS, TlsConfiguration, Transport};
 
 use crate::config::MqttConfig;
