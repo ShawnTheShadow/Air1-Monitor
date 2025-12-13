@@ -167,10 +167,8 @@ fn tls_config(ca_path: Option<&Path>) -> Result<TlsConfiguration> {
             .with_context(|| format!("failed to read CA file at {}", path.display()))?;
         let mut cursor = &data[..];
         let certs: Vec<CertificateDer<'static>> = rustls_pemfile::certs(&mut cursor)
-            .map_err(|_| anyhow::anyhow!("failed to parse CA certs"))?
-            .into_iter()
-            .map(CertificateDer::from)
-            .collect();
+            .collect::<Result<Vec<_>, _>>()
+            .map_err(|_| anyhow::anyhow!("failed to parse CA certs"))?;
         let (added, _skipped) = roots.add_parsable_certificates(certs);
         if added == 0 {
             anyhow::bail!("no CA certs added from {}", path.display());
