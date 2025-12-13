@@ -232,6 +232,90 @@ impl Air1App {
         }
     }
 
+    fn draw_overall_quality(&self, ui: &mut egui::Ui) {
+        // Calculate overall air quality based on PM2.5 primarily
+        let (quality_text, quality_color, quality_icon) = if let Some(pm25) = self.metrics.pm25 {
+            if pm25 < 12.0 {
+                ("Excellent Air Quality", egui::Color32::from_rgb(76, 175, 80), "★")
+            } else if pm25 < 35.0 {
+                ("Good Air Quality", egui::Color32::from_rgb(139, 195, 74), "●")
+            } else if pm25 < 55.0 {
+                ("Moderate Air Quality", egui::Color32::from_rgb(255, 235, 59), "◐")
+            } else if pm25 < 150.0 {
+                ("Poor Air Quality", egui::Color32::from_rgb(255, 152, 0), "▲")
+            } else if pm25 < 250.0 {
+                ("Unhealthy Air Quality", egui::Color32::from_rgb(244, 67, 54), "⬣")
+            } else {
+                ("Hazardous Air Quality", egui::Color32::from_rgb(156, 39, 176), "✖")
+            }
+        } else {
+            ("Air Quality Unknown", egui::Color32::GRAY, "?")
+        };
+
+        let frame = egui::Frame::none()
+            .fill(quality_color.linear_multiply(0.15))
+            .stroke(egui::Stroke::new(2.0, quality_color))
+            .rounding(egui::Rounding::same(8.0))
+            .inner_margin(egui::Margin::symmetric(16.0, 12.0));
+
+        frame.show(ui, |ui| {
+            ui.horizontal(|ui| {
+                ui.label(egui::RichText::new(quality_icon).size(32.0).color(quality_color));
+                ui.add_space(8.0);
+                ui.vertical(|ui| {
+                    ui.label(
+                        egui::RichText::new(quality_text)
+                            .size(22.0)
+                            .strong()
+                            .color(quality_color)
+                    );
+                    if let Some(pm25) = self.metrics.pm25 {
+                        ui.label(
+                            egui::RichText::new(format!("PM2.5: {:.1} μg/m³", pm25))
+                                .size(14.0)
+                                .color(egui::Color32::LIGHT_GRAY)
+                        );
+                    }
+                });
+                
+                // Add warnings for other concerning metrics
+                ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
+                    let mut warnings = Vec::new();
+                    
+                    if let Some(co2) = self.metrics.co2 {
+                        if co2 > 2000.0 {
+                            warnings.push(format!("! High CO₂: {:.0} ppm", co2));
+                        }
+                    }
+                    
+                    if let Some(tvoc) = self.metrics.tvoc {
+                        if tvoc > 2200.0 {
+                            warnings.push(format!("! High VOC: {:.0} ppb", tvoc));
+                        }
+                    }
+                    
+                    if let Some(battery) = self.metrics.battery {
+                        if battery < 20.0 {
+                            warnings.push(format!("▼ Low Battery: {:.0}%", battery));
+                        }
+                    }
+                    
+                    if !warnings.is_empty() {
+                        ui.vertical(|ui| {
+                            for warning in warnings {
+                                ui.label(
+                                    egui::RichText::new(warning)
+                                        .size(12.0)
+                                        .color(egui::Color32::from_rgb(255, 152, 0))
+                                );
+                            }
+                        });
+                    }
+                });
+            });
+        });
+    }
+
     fn draw_settings(&mut self, ui: &mut egui::Ui) {
         ui.heading("MQTT Broker");
         ui.separator();
@@ -423,6 +507,12 @@ impl App for Air1App {
         });
 
         egui::CentralPanel::default().show(ctx, |ui| {
+            // Overall Air Quality Indicator
+            if self.connected {
+                self.draw_overall_quality(ui);
+                ui.add_space(8.0);
+            }
+            
             egui::CollapsingHeader::new("Connection Settings")
                 .default_open(true)
                 .show(ui, |ui| self.draw_settings(ui));
@@ -468,55 +558,49 @@ impl App for Air1App {
 
             ui.add_space(8.0);
 
+            // Air Quality Section
+            ui.heading("Air Quality (Particulate Matter)");
+            ui.add_space(4.0);
+            
             ui.horizontal_wrapped(|ui| {
-                self.metric_card(
-                    ui,
-                    "PM1",
-                    self.metrics.pm1,
-                    egui::Color32::from_rgb(86, 156, 214),
-                );
-                self.metric_card(
-                    ui,
-                    "PM2.5",
-                    self.metrics.pm25,
-                    egui::Color32::from_rgb(90, 200, 90),
-                );
-                self.metric_card(
-                    ui,
-                    "PM10",
-                    self.metrics.pm10,
-                    egui::Color32::from_rgb(237, 167, 54),
-                );
-                self.metric_card(
-                    ui,
-                    "VOC",
-                    self.metrics.tvoc,
-                    egui::Color32::from_rgb(180, 130, 255),
-                );
-                self.metric_card(
-                    ui,
-                    "CO2",
-                    self.metrics.co2,
-                    egui::Color32::from_rgb(255, 99, 71),
-                );
-                self.metric_card(
-                    ui,
-                    "Temp",
-                    self.metrics.temp,
-                    egui::Color32::from_rgb(255, 214, 102),
-                );
-                self.metric_card(
-                    ui,
-                    "Humidity",
-                    self.metrics.humidity,
-                    egui::Color32::from_rgb(102, 204, 255),
-                );
-                self.metric_card(
-                    ui,
-                    "Battery",
-                    self.metrics.battery,
-                    egui::Color32::from_rgb(170, 170, 170),
-                );
+                self.gauge_card(ui, "PM2.5", self.metrics.pm25, "μg/m³", 
+                    &[(0.0, 12.0, "Good"), (12.0, 35.0, "Moderate"), (35.0, 55.0, "Unhealthy (Sensitive)"), 
+                      (55.0, 150.0, "Unhealthy"), (150.0, 250.0, "Very Unhealthy")], 250.0);
+                self.gauge_card(ui, "PM10", self.metrics.pm10, "μg/m³",
+                    &[(0.0, 54.0, "Good"), (54.0, 154.0, "Moderate"), (154.0, 254.0, "Unhealthy (Sensitive)"),
+                      (254.0, 354.0, "Unhealthy"), (354.0, 424.0, "Very Unhealthy")], 500.0);
+                self.gauge_card(ui, "PM1", self.metrics.pm1, "μg/m³",
+                    &[(0.0, 10.0, "Good"), (10.0, 25.0, "Moderate"), (25.0, 50.0, "Unhealthy")], 100.0);
+            });
+
+            ui.add_space(12.0);
+
+            // Gas Sensors Section
+            ui.heading("Gas Sensors");
+            ui.add_space(4.0);
+
+            ui.horizontal_wrapped(|ui| {
+                self.gauge_card(ui, "CO₂", self.metrics.co2, "ppm",
+                    &[(0.0, 800.0, "Excellent"), (800.0, 1000.0, "Good"), (1000.0, 1500.0, "Acceptable"),
+                      (1500.0, 2000.0, "Poor"), (2000.0, 5000.0, "Bad")], 5000.0);
+                self.gauge_card(ui, "TVOC", self.metrics.tvoc, "ppb",
+                    &[(0.0, 220.0, "Excellent"), (220.0, 660.0, "Good"), (660.0, 1430.0, "Moderate"),
+                      (1430.0, 2200.0, "Poor"), (2200.0, 5500.0, "Unhealthy")], 5500.0);
+            });
+
+            ui.add_space(12.0);
+
+            // Environment Section
+            ui.heading("Environment");
+            ui.add_space(4.0);
+
+            ui.horizontal_wrapped(|ui| {
+                self.gauge_card(ui, "Temperature", self.metrics.temp, "°C",
+                    &[(0.0, 18.0, "Cool"), (18.0, 24.0, "Comfortable"), (24.0, 28.0, "Warm"), (28.0, 40.0, "Hot")], 40.0);
+                self.gauge_card(ui, "Humidity", self.metrics.humidity, "%",
+                    &[(0.0, 30.0, "Dry"), (30.0, 60.0, "Comfortable"), (60.0, 80.0, "Humid"), (80.0, 100.0, "Very Humid")], 100.0);
+                self.gauge_card(ui, "Battery", self.metrics.battery, "%",
+                    &[(0.0, 20.0, "Critical"), (20.0, 50.0, "Low"), (50.0, 80.0, "Good"), (80.0, 100.0, "Excellent")], 100.0);
             });
 
             if let Some(last) = &self.metrics.last_topic {
@@ -532,30 +616,152 @@ impl App for Air1App {
 }
 
 impl Air1App {
-    fn metric_card(
+    fn get_quality_color(value: f64, ranges: &[(f64, f64, &'static str)]) -> egui::Color32 {
+        // Color scheme: Green -> Yellow -> Orange -> Red -> Purple
+        let colors = [
+            egui::Color32::from_rgb(76, 175, 80),   // Green - Good
+            egui::Color32::from_rgb(255, 235, 59),  // Yellow - Moderate
+            egui::Color32::from_rgb(255, 152, 0),   // Orange - Unhealthy for Sensitive
+            egui::Color32::from_rgb(244, 67, 54),   // Red - Unhealthy
+            egui::Color32::from_rgb(156, 39, 176),  // Purple - Very Unhealthy
+        ];
+        
+        for (i, (min, max, _)) in ranges.iter().enumerate() {
+            if value >= *min && value < *max {
+                return colors.get(i).copied().unwrap_or(egui::Color32::GRAY);
+            }
+        }
+        
+        // If beyond all ranges, use the last color
+        colors.get(ranges.len() - 1).copied().unwrap_or(egui::Color32::DARK_RED)
+    }
+    
+    fn get_quality_label(value: f64, ranges: &[(f64, f64, &'static str)]) -> &'static str {
+        for (min, max, label) in ranges {
+            if value >= *min && value < *max {
+                return label;
+            }
+        }
+        ranges.last().map(|(_, _, label)| *label).unwrap_or("Extreme")
+    }
+    
+    fn draw_gauge(&self, ui: &mut egui::Ui, value: f64, max_value: f64, ranges: &[(f64, f64, &'static str)], size: f32) {
+        let (response, painter) = ui.allocate_painter(
+            egui::Vec2::new(size, size),
+            egui::Sense::hover()
+        );
+        
+        let center = response.rect.center();
+        let radius = size / 2.0 - 8.0;
+        let stroke_width = 12.0;
+        
+        // Draw background arc
+        let arc_start = std::f32::consts::PI * 0.75;
+        let arc_end = std::f32::consts::PI * 2.25;
+        
+        // Draw colored segments
+        let total_angle = arc_end - arc_start;
+        for (min, max, _) in ranges.iter() {
+            let start_ratio = (*min / max_value).min(1.0);
+            let end_ratio = (*max / max_value).min(1.0);
+            let segment_start = arc_start + total_angle * start_ratio as f32;
+            let segment_end = arc_start + total_angle * end_ratio as f32;
+            
+            let color = Self::get_quality_color(*min, ranges);
+            self.draw_arc(&painter, center, radius, segment_start, segment_end, stroke_width, color.linear_multiply(0.3));
+        }
+        
+        // Draw value arc
+        let value_ratio = (value / max_value).min(1.0) as f32;
+        let value_angle = arc_start + total_angle * value_ratio;
+        let value_color = Self::get_quality_color(value, ranges);
+        self.draw_arc(&painter, center, radius, arc_start, value_angle, stroke_width, value_color);
+        
+        // Draw needle
+        let needle_length = radius - stroke_width / 2.0;
+        let needle_end = center + egui::Vec2::new(
+            needle_length * value_angle.cos(),
+            needle_length * value_angle.sin()
+        );
+        painter.line_segment(
+            [center, needle_end],
+            egui::Stroke::new(3.0, egui::Color32::WHITE)
+        );
+        
+        // Draw center circle
+        painter.circle_filled(center, 6.0, egui::Color32::from_gray(40));
+        painter.circle_stroke(center, 6.0, egui::Stroke::new(2.0, egui::Color32::WHITE));
+    }
+    
+    fn draw_arc(&self, painter: &egui::Painter, center: egui::Pos2, radius: f32, 
+                start_angle: f32, end_angle: f32, width: f32, color: egui::Color32) {
+        let segments = 32;
+        let angle_step = (end_angle - start_angle) / segments as f32;
+        
+        for i in 0..segments {
+            let a1 = start_angle + angle_step * i as f32;
+            let a2 = start_angle + angle_step * (i + 1) as f32;
+            
+            let p1 = center + egui::Vec2::new(radius * a1.cos(), radius * a1.sin());
+            let p2 = center + egui::Vec2::new(radius * a2.cos(), radius * a2.sin());
+            
+            painter.line_segment([p1, p2], egui::Stroke::new(width, color));
+        }
+    }
+    
+    fn gauge_card(
         &self,
         ui: &mut egui::Ui,
         label: &str,
         value: Option<f64>,
-        color: egui::Color32,
+        unit: &str,
+        ranges: &[(f64, f64, &'static str)],
+        max_value: f64,
     ) {
-        let text = match value {
-            Some(v) => format!("{:.1}", v),
-            None => "--".to_string(),
-        };
+        let card_width = 200.0;
+        let gauge_size = 140.0;
+        
         let card = egui::Frame::none()
-            .fill(egui::Color32::from_gray(30))
-            .stroke(egui::Stroke::new(1.0, egui::Color32::from_gray(60)))
-            .rounding(egui::Rounding::same(8.0))
-            .inner_margin(egui::Margin::symmetric(10.0, 8.0));
+            .fill(egui::Color32::from_gray(25))
+            .stroke(egui::Stroke::new(2.0, egui::Color32::from_gray(50)))
+            .rounding(egui::Rounding::same(12.0))
+            .inner_margin(egui::Margin::same(16.0));
+            
         card.show(ui, |ui| {
-            ui.vertical(|ui| {
-                ui.label(egui::RichText::new(label).color(color).size(14.0));
-                ui.label(
-                    egui::RichText::new(text)
-                        .size(20.0)
-                        .color(egui::Color32::WHITE),
-                );
+            ui.set_width(card_width);
+            ui.vertical_centered(|ui| {
+                ui.label(egui::RichText::new(label).size(18.0).strong());
+                ui.add_space(8.0);
+                
+                if let Some(v) = value {
+                    self.draw_gauge(ui, v, max_value, ranges, gauge_size);
+                    
+                    ui.add_space(8.0);
+                    
+                    let quality_label = Self::get_quality_label(v, ranges);
+                    let quality_color = Self::get_quality_color(v, ranges);
+                    
+                    ui.label(
+                        egui::RichText::new(format!("{:.1} {}", v, unit))
+                            .size(24.0)
+                            .strong()
+                            .color(egui::Color32::WHITE)
+                    );
+                    
+                    ui.label(
+                        egui::RichText::new(quality_label)
+                            .size(14.0)
+                            .color(quality_color)
+                    );
+                } else {
+                    ui.add_space(gauge_size / 2.0 - 20.0);
+                    ui.label(
+                        egui::RichText::new("No Data")
+                            .size(20.0)
+                            .color(egui::Color32::GRAY)
+                    );
+                    ui.add_space(gauge_size / 2.0 - 20.0);
+                }
             });
         });
     }

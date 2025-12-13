@@ -1,1 +1,21 @@
+# Rust build artifacts
 air1-monitor/target/
+**/target/
+Cargo.lock
+
+# IDE specific files
+.vscode/
+.idea/
+*.swp
+*.swo
+*~
+.DS_Store
+
+# OS specific
+Thumbs.db
+desktop.ini
+
+# Application specific
+*.log
+.env
+config.local.toml
