@@ -24,7 +24,7 @@ pub fn save_password(secret: &str) -> Result<()> {
 pub fn delete_password() -> Result<()> {
     let entry =
         keyring::Entry::new(SERVICE_NAME, ACCOUNT_NAME).context("failed to open keyring entry")?;
-    match entry.delete_password() {
+    match entry.delete_credential() {
         Ok(_) => Ok(()),
         Err(keyring::Error::NoEntry) => Ok(()),
         Err(err) => Err(err).context("failed to delete password from keyring"),
