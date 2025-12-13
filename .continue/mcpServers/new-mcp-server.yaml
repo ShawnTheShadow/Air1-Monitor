@@ -1,0 +1,18 @@
+name: context7
+version: 0.0.1
+schema: v1
+mcpServers:
+  - name: context7
+    command: npx
+    args:
+      - "-y"
+      - "@upstash/context7-mcp"
+      - "--api-key"
+      - "ctx7sk-f2ee6e79-47db-40fa-93b9-0e3713478f1e"
+  - name: tavily-mcp
+    command: npx
+    args:
+      - "-y"
+      - "tavily-mcp@latest"
+    env:
+      TAVILY_API_KEY: "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"
