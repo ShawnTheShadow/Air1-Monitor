@@ -535,197 +535,201 @@ impl App for Air1App {
         });
 
         egui::CentralPanel::default().show(ctx, |ui| {
-            // Overall Air Quality Indicator
-            if self.connected {
-                self.draw_overall_quality(ui);
-                ui.add_space(8.0);
-            }
-
-            egui::CollapsingHeader::new("Connection Settings")
-                .default_open(true)
-                .show(ui, |ui| self.draw_settings(ui));
-
-            ui.separator();
-            ui.heading("Live dashboard");
-
-            let availability = match (self.connected, self.metrics.last_update) {
-                (false, _) => ("offline", egui::Color32::RED),
-                (true, Some(ts)) => {
-                    let age = ts.elapsed();
-                    if age.as_secs() <= 15 {
-                        ("fresh", egui::Color32::GREEN)
-                    } else if age.as_secs() <= 60 {
-                        ("stale", egui::Color32::YELLOW)
-                    } else {
-                        ("stalled", egui::Color32::RED)
+            egui::ScrollArea::vertical()
+                .auto_shrink([false; 2])
+                .show(ui, |ui| {
+                    // Overall Air Quality Indicator
+                    if self.connected {
+                        self.draw_overall_quality(ui);
+                        ui.add_space(8.0);
                     }
-                }
-                (true, None) => ("no data", egui::Color32::YELLOW),
-            };
 
-            ui.horizontal(|ui| {
-                ui.label(
-                    egui::RichText::new(format!(
-                        "Connection: {}",
-                        if self.connected { "online" } else { "offline" }
-                    ))
-                    .color(if self.connected {
-                        egui::Color32::LIGHT_GREEN
-                    } else {
-                        egui::Color32::RED
-                    }),
-                );
-                ui.label(
-                    egui::RichText::new(format!("Availability: {}", availability.0))
-                        .color(availability.1),
-                );
-                if let Some(ts) = self.metrics.last_update {
-                    ui.label(format!("Last update: {}s ago", ts.elapsed().as_secs()));
-                }
-            });
+                    egui::CollapsingHeader::new("Connection Settings")
+                        .default_open(true)
+                        .show(ui, |ui| self.draw_settings(ui));
 
-            ui.add_space(8.0);
+                    ui.separator();
+                    ui.heading("Live dashboard");
 
-            // Air Quality Section
-            ui.heading("Air Quality (Particulate Matter)");
-            ui.add_space(4.0);
+                    let availability = match (self.connected, self.metrics.last_update) {
+                        (false, _) => ("offline", egui::Color32::RED),
+                        (true, Some(ts)) => {
+                            let age = ts.elapsed();
+                            if age.as_secs() <= 15 {
+                                ("fresh", egui::Color32::GREEN)
+                            } else if age.as_secs() <= 60 {
+                                ("stale", egui::Color32::YELLOW)
+                            } else {
+                                ("stalled", egui::Color32::RED)
+                            }
+                        }
+                        (true, None) => ("no data", egui::Color32::YELLOW),
+                    };
 
-            ui.horizontal_wrapped(|ui| {
-                self.gauge_card(
-                    ui,
-                    "PM2.5",
-                    self.metrics.pm25,
-                    "μg/m³",
-                    &[
-                        (0.0, 12.0, "Good"),
-                        (12.0, 35.0, "Moderate"),
-                        (35.0, 55.0, "Unhealthy (Sensitive)"),
-                        (55.0, 150.0, "Unhealthy"),
-                        (150.0, 250.0, "Very Unhealthy"),
-                    ],
-                    250.0,
-                );
-                self.gauge_card(
-                    ui,
-                    "PM10",
-                    self.metrics.pm10,
-                    "μg/m³",
-                    &[
-                        (0.0, 54.0, "Good"),
-                        (54.0, 154.0, "Moderate"),
-                        (154.0, 254.0, "Unhealthy (Sensitive)"),
-                        (254.0, 354.0, "Unhealthy"),
-                        (354.0, 424.0, "Very Unhealthy"),
-                    ],
-                    500.0,
-                );
-                self.gauge_card(
-                    ui,
-                    "PM1",
-                    self.metrics.pm1,
-                    "μg/m³",
-                    &[
-                        (0.0, 10.0, "Good"),
-                        (10.0, 25.0, "Moderate"),
-                        (25.0, 50.0, "Unhealthy"),
-                    ],
-                    100.0,
-                );
-            });
+                    ui.horizontal(|ui| {
+                        ui.label(
+                            egui::RichText::new(format!(
+                                "Connection: {}",
+                                if self.connected { "online" } else { "offline" }
+                            ))
+                            .color(if self.connected {
+                                egui::Color32::LIGHT_GREEN
+                            } else {
+                                egui::Color32::RED
+                            }),
+                        );
+                        ui.label(
+                            egui::RichText::new(format!("Availability: {}", availability.0))
+                                .color(availability.1),
+                        );
+                        if let Some(ts) = self.metrics.last_update {
+                            ui.label(format!("Last update: {}s ago", ts.elapsed().as_secs()));
+                        }
+                    });
 
-            ui.add_space(12.0);
+                    ui.add_space(8.0);
 
-            // Gas Sensors Section
-            ui.heading("Gas Sensors");
-            ui.add_space(4.0);
+                    // Air Quality Section
+                    ui.heading("Air Quality (Particulate Matter)");
+                    ui.add_space(4.0);
 
-            ui.horizontal_wrapped(|ui| {
-                self.gauge_card(
-                    ui,
-                    "CO₂",
-                    self.metrics.co2,
-                    "ppm",
-                    &[
-                        (0.0, 800.0, "Excellent"),
-                        (800.0, 1000.0, "Good"),
-                        (1000.0, 1500.0, "Acceptable"),
-                        (1500.0, 2000.0, "Poor"),
-                        (2000.0, 5000.0, "Bad"),
-                    ],
-                    5000.0,
-                );
-                self.gauge_card(
-                    ui,
-                    "TVOC",
-                    self.metrics.tvoc,
-                    "ppb",
-                    &[
-                        (0.0, 220.0, "Excellent"),
-                        (220.0, 660.0, "Good"),
-                        (660.0, 1430.0, "Moderate"),
-                        (1430.0, 2200.0, "Poor"),
-                        (2200.0, 5500.0, "Unhealthy"),
-                    ],
-                    5500.0,
-                );
-            });
+                    ui.horizontal_wrapped(|ui| {
+                        self.gauge_card(
+                            ui,
+                            "PM2.5",
+                            self.metrics.pm25,
+                            "μg/m³",
+                            &[
+                                (0.0, 12.0, "Good"),
+                                (12.0, 35.0, "Moderate"),
+                                (35.0, 55.0, "Unhealthy (Sensitive)"),
+                                (55.0, 150.0, "Unhealthy"),
+                                (150.0, 250.0, "Very Unhealthy"),
+                            ],
+                            250.0,
+                        );
+                        self.gauge_card(
+                            ui,
+                            "PM10",
+                            self.metrics.pm10,
+                            "μg/m³",
+                            &[
+                                (0.0, 54.0, "Good"),
+                                (54.0, 154.0, "Moderate"),
+                                (154.0, 254.0, "Unhealthy (Sensitive)"),
+                                (254.0, 354.0, "Unhealthy"),
+                                (354.0, 424.0, "Very Unhealthy"),
+                            ],
+                            500.0,
+                        );
+                        self.gauge_card(
+                            ui,
+                            "PM1",
+                            self.metrics.pm1,
+                            "μg/m³",
+                            &[
+                                (0.0, 10.0, "Good"),
+                                (10.0, 25.0, "Moderate"),
+                                (25.0, 50.0, "Unhealthy"),
+                            ],
+                            100.0,
+                        );
+                    });
 
-            ui.add_space(12.0);
+                    ui.add_space(12.0);
 
-            // Environment Section
-            ui.heading("Environment");
-            ui.add_space(4.0);
+                    // Gas Sensors Section
+                    ui.heading("Gas Sensors");
+                    ui.add_space(4.0);
 
-            ui.horizontal_wrapped(|ui| {
-                self.gauge_card(
-                    ui,
-                    "Temperature",
-                    self.metrics.temp,
-                    "°F",
-                    &[
-                        (32.0, 64.0, "Cool"),
-                        (64.0, 75.0, "Comfortable"),
-                        (75.0, 82.0, "Warm"),
-                        (82.0, 104.0, "Hot"),
-                    ],
-                    104.0,
-                );
-                self.gauge_card(
-                    ui,
-                    "Humidity",
-                    self.metrics.humidity,
-                    "%",
-                    &[
-                        (0.0, 30.0, "Dry"),
-                        (30.0, 60.0, "Comfortable"),
-                        (60.0, 80.0, "Humid"),
-                        (80.0, 100.0, "Very Humid"),
-                    ],
-                    100.0,
-                );
-                self.gauge_card(
-                    ui,
-                    "Battery",
-                    self.metrics.battery,
-                    "%",
-                    &[
-                        (0.0, 20.0, "Critical"),
-                        (20.0, 50.0, "Low"),
-                        (50.0, 80.0, "Good"),
-                        (80.0, 100.0, "Excellent"),
-                    ],
-                    100.0,
-                );
-            });
+                    ui.horizontal_wrapped(|ui| {
+                        self.gauge_card(
+                            ui,
+                            "CO₂",
+                            self.metrics.co2,
+                            "ppm",
+                            &[
+                                (0.0, 800.0, "Excellent"),
+                                (800.0, 1000.0, "Good"),
+                                (1000.0, 1500.0, "Acceptable"),
+                                (1500.0, 2000.0, "Poor"),
+                                (2000.0, 5000.0, "Bad"),
+                            ],
+                            5000.0,
+                        );
+                        self.gauge_card(
+                            ui,
+                            "TVOC",
+                            self.metrics.tvoc,
+                            "ppb",
+                            &[
+                                (0.0, 220.0, "Excellent"),
+                                (220.0, 660.0, "Good"),
+                                (660.0, 1430.0, "Moderate"),
+                                (1430.0, 2200.0, "Poor"),
+                                (2200.0, 5500.0, "Unhealthy"),
+                            ],
+                            5500.0,
+                        );
+                    });
 
-            if let Some(last) = &self.metrics.last_topic {
-                ui.add_space(6.0);
-                ui.label(
-                    egui::RichText::new(format!("Last topic: {last}"))
-                        .italics()
-                        .color(egui::Color32::GRAY),
-                );
-            }
+                    ui.add_space(12.0);
+
+                    // Environment Section
+                    ui.heading("Environment");
+                    ui.add_space(4.0);
+
+                    ui.horizontal_wrapped(|ui| {
+                        self.gauge_card(
+                            ui,
+                            "Temperature",
+                            self.metrics.temp,
+                            "°F",
+                            &[
+                                (32.0, 64.0, "Cool"),
+                                (64.0, 75.0, "Comfortable"),
+                                (75.0, 82.0, "Warm"),
+                                (82.0, 104.0, "Hot"),
+                            ],
+                            104.0,
+                        );
+                        self.gauge_card(
+                            ui,
+                            "Humidity",
+                            self.metrics.humidity,
+                            "%",
+                            &[
+                                (0.0, 30.0, "Dry"),
+                                (30.0, 60.0, "Comfortable"),
+                                (60.0, 80.0, "Humid"),
+                                (80.0, 100.0, "Very Humid"),
+                            ],
+                            100.0,
+                        );
+                        self.gauge_card(
+                            ui,
+                            "Battery",
+                            self.metrics.battery,
+                            "%",
+                            &[
+                                (0.0, 20.0, "Critical"),
+                                (20.0, 50.0, "Low"),
+                                (50.0, 80.0, "Good"),
+                                (80.0, 100.0, "Excellent"),
+                            ],
+                            100.0,
+                        );
+                    });
+
+                    if let Some(last) = &self.metrics.last_topic {
+                        ui.add_space(6.0);
+                        ui.label(
+                            egui::RichText::new(format!("Last topic: {last}"))
+                                .italics()
+                                .color(egui::Color32::GRAY),
+                        );
+                    }
+                });
         });
     }
 }
