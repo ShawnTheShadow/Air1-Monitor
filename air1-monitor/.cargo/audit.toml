@@ -1,0 +1,26 @@
+# Configuration for cargo-audit
+# This file configures which security advisories to ignore.
+# These are all transitive dependencies that cannot be directly fixed 
+# until upstream dependencies are updated.
+
+[advisories]
+# rustls-pemfile is unmaintained (advised to use rustls-pki-types >= 1.9)
+# Comes from rumqttc as a transitive dependency
+# We've migrated our direct usage to rustls-pki-types
+# Waiting for rumqttc to update: https://github.com/bytebeamio/rumqtt
+ignore = [
+    "RUSTSEC-2025-0134",  # rustls-pemfile (from rumqttc)
+]
+
+# derivative is unmaintained 
+# Comes from keyring -> secret-service -> zbus chain
+# These dependencies are actively maintained, waiting for zbus to update
+# ignore = ["RUSTSEC-2024-0388"]
+
+# instant is unmaintained
+# Comes from async-io ecosystem (fastrand -> futures-lite)
+# ignore = ["RUSTSEC-2024-0384"]
+
+# paste is unmaintained  
+# Comes from eframe -> wgpu -> metal (macOS only)
+# ignore = ["RUSTSEC-2024-0436"]

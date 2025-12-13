@@ -7,7 +7,7 @@ use std::{
 };
 
 use anyhow::{Context, Result};
-use rumqttc::tokio_rustls::rustls::{ClientConfig, RootCertStore, pki_types::CertificateDer};
+use rumqttc::tokio_rustls::rustls::{ClientConfig, RootCertStore, pki_types::{CertificateDer, pem::PemObject}};
 use rumqttc::{Client, Event, MqttOptions, Packet, QoS, TlsConfiguration, Transport};
 
 use crate::config::MqttConfig;
@@ -165,8 +165,7 @@ fn tls_config(ca_path: Option<&Path>) -> Result<TlsConfiguration> {
     if let Some(path) = ca_path {
         let data = fs::read(path)
             .with_context(|| format!("failed to read CA file at {}", path.display()))?;
-        let mut cursor = &data[..];
-        let certs: Vec<CertificateDer<'static>> = rustls_pemfile::certs(&mut cursor)
+        let certs: Vec<CertificateDer<'static>> = CertificateDer::pem_slice_iter(&data)
             .collect::<Result<Vec<_>, _>>()
             .map_err(|_| anyhow::anyhow!("failed to parse CA certs"))?;
         let (added, _skipped) = roots.add_parsable_certificates(certs);
