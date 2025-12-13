@@ -22,6 +22,6 @@ fn main() -> eframe::Result<()> {
     eframe::run_native(
         "Air 1 MQTT Monitor",
         native_options,
-        Box::new(|_cc| Box::new(Air1App::init())),
+        Box::new(|_cc| Ok(Box::new(Air1App::init()))),
     )
 }
