@@ -18,7 +18,6 @@ struct Metrics {
     co2: Option<f64>,
     temp: Option<f64>,
     humidity: Option<f64>,
-    battery: Option<f64>,
     last_topic: Option<String>,
     last_update: Option<Instant>,
 }
@@ -198,7 +197,6 @@ impl Air1App {
                         "co2" => &mut self.metrics.co2,
                         "temp" | "temperature" => &mut self.metrics.temp,
                         "humidity" => &mut self.metrics.humidity,
-                        "battery" => &mut self.metrics.battery,
                         _ => continue,
                     };
                     *slot = Some(value);
@@ -319,12 +317,6 @@ impl Air1App {
                     if let Some(tvoc) = self.metrics.tvoc {
                         if tvoc > 2200.0 {
                             warnings.push(format!("! High VOC: {:.0} ppb", tvoc));
-                        }
-                    }
-
-                    if let Some(battery) = self.metrics.battery {
-                        if battery < 20.0 {
-                            warnings.push(format!("▼ Low Battery: {:.0}%", battery));
                         }
                     }
 
@@ -703,19 +695,6 @@ impl App for Air1App {
                                 (30.0, 60.0, "Comfortable"),
                                 (60.0, 80.0, "Humid"),
                                 (80.0, 100.0, "Very Humid"),
-                            ],
-                            100.0,
-                        );
-                        self.gauge_card(
-                            ui,
-                            "Battery",
-                            self.metrics.battery,
-                            "%",
-                            &[
-                                (0.0, 20.0, "Critical"),
-                                (20.0, 50.0, "Low"),
-                                (50.0, 80.0, "Good"),
-                                (80.0, 100.0, "Excellent"),
                             ],
                             100.0,
                         );
