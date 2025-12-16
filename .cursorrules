@@ -1,0 +1,75 @@
+# Air1 Monitor - Continue Rules
+
+## Project Overview
+This is a Rust application for monitoring air quality sensors via MQTT. It provides a GUI interface using eframe/egui to display real-time metrics like PM1, PM2.5, PM10, TVOC, CO2, temperature, and humidity.
+
+## Language & Framework
+- **Language**: Rust (2024 edition)
+- **GUI Framework**: eframe/egui with wgpu backend
+- **MQTT Client**: rumqttc with rustls
+- **Configuration**: TOML files with directories crate for XDG compliance
+- **Secrets Management**: keyring for secure password storage
+- **Logging**: tracing with tracing-subscriber
+
+## Code Structure
+- `src/main.rs`: Application entry point, initializes GUI
+- `src/app.rs`: Main application logic, GUI rendering, MQTT event handling
+- `src/config.rs`: Configuration management, MQTT settings
+- `src/mqtt.rs`: MQTT client implementation
+- `src/secrets.rs`: Keyring integration for password management
+
+## Coding Standards
+- Use `anyhow::Result` for error handling
+- Follow Rust naming conventions (snake_case for variables/functions, PascalCase for types)
+- Use `tracing` macros for logging instead of `println!`
+- Prefer `Option` and `Result` over panics
+- Use serde for serialization with `#[derive(Serialize, Deserialize)]`
+- Keep dependencies minimal and up-to-date
+
+## MQTT Topics & Metrics
+The application monitors air quality sensors with these metrics:
+- PM1, PM2.5, PM10 (particulate matter in µg/m³)
+- TVOC (total volatile organic compounds in ppb)
+- CO2 (carbon dioxide in ppm)
+- Temperature (in °C)
+- Humidity (in %)
+
+Topics follow a configurable prefix pattern.
+
+## Configuration
+- MQTT settings: host, port, TLS, client ID, username, QoS, keepalive
+- Passwords stored securely in system keyring
+- Config files stored in XDG config directory (`~/.config/air1/monitor/`)
+
+## GUI Guidelines
+- Use egui's immediate mode GUI paradigm
+- Display metrics with appropriate units and formatting
+- Show connection status and last update times
+- Provide configuration UI for MQTT settings
+- Handle connection errors gracefully in the UI
+
+## Error Handling
+- Use `anyhow::Context` for adding context to errors
+- Log warnings for recoverable errors
+- Display user-friendly error messages in the GUI
+- Gracefully handle MQTT disconnections and reconnections
+
+## Security
+- Store passwords in system keyring, never in config files
+- Use TLS for MQTT connections when possible
+- Validate user inputs for MQTT settings
+
+## Testing
+- Write unit tests for configuration parsing and MQTT message handling
+- Test GUI components with egui's testing utilities
+- Ensure proper error handling in all code paths
+
+## Dependencies
+Keep dependencies minimal. Current key dependencies:
+- `eframe`: GUI framework
+- `rumqttc`: MQTT client
+- `keyring`: Secure credential storage
+- `serde`: Serialization
+- `toml`: Config file format
+- `tracing`: Logging
+- `anyhow`: Error handling
