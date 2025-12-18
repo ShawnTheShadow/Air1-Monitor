@@ -1,6 +1,6 @@
 # Maintainer: ShawnTheShadow <shawn@stsg.io>
 pkgname=air1-monitor
-pkgver=0.1.0
+pkgver=0.1.4.r45
 pkgrel=1
 pkgdesc="Air1 Monitor - MQTT monitoring application"
 arch=('x86_64')
@@ -10,6 +10,11 @@ depends=('gcc-libs')
 makedepends=('cargo' 'rust')
 source=()
 sha256sums=()
+
+pkgver() {
+    cd "${startdir:-.}"
+    printf "0.1.4.r%s" "$(git rev-list --count HEAD)"
+}
 
 prepare() {
     cd "$startdir"

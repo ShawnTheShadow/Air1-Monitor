@@ -1,13 +1,15 @@
 [package]
 name = "air1-monitor"
-version = "0.1.0"
+version = "0.1.4"
 edition = "2024"
+build = "build.rs"
 
 [dependencies]
 anyhow = "1.0"
 directories = "6.0"
 eframe = { version = "0.33", default-features = true, features = ["wgpu"] }
 egui_extras = "0.33"
+image = { version = "0.25", default-features = false, features = ["png"] }
 keyring = { version = "3.6", default-features = true }
 rumqttc = { version = "0.25", default-features = false, features = ["use-rustls"] }
 rustls = { version = "0.23", default-features = false, features = ["ring", "std"] }

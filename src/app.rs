@@ -49,6 +49,7 @@ pub struct Air1App {
     connected: bool,
     mqtt_handle: Option<JoinHandle<()>>,
     mqtt_stop: Option<mpsc::Sender<()>>,
+    last_viewport_size: Option<egui::Vec2>,
 }
 
 impl Default for Air1App {
@@ -73,6 +74,7 @@ impl Default for Air1App {
             connected: false,
             mqtt_handle: None,
             mqtt_stop: None,
+            last_viewport_size: None,
         }
     }
 }
@@ -131,6 +133,7 @@ impl Air1App {
             connected: false,
             mqtt_handle: None,
             mqtt_stop: None,
+            last_viewport_size: None,
         }
     }
 
@@ -515,6 +518,15 @@ impl App for Air1App {
     fn update(&mut self, ctx: &egui::Context, _frame: &mut eframe::Frame) {
         self.poll_tests();
         self.poll_mqtt();
+
+        // Check for viewport size changes and request repaint for smooth resizing
+        let current_size = ctx.screen_rect().size();
+        if let Some(last_size) = self.last_viewport_size {
+            if (current_size.x - last_size.x).abs() > 0.1 || (current_size.y - last_size.y).abs() > 0.1 {
+                ctx.request_repaint();
+            }
+        }
+        self.last_viewport_size = Some(current_size);
 
         // simple modern look
         ctx.set_visuals(egui::Visuals::dark());
