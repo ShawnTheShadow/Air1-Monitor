@@ -139,7 +139,7 @@ impl Air1App {
 
     fn save_all(&mut self) {
         let write_cfg = || -> anyhow::Result<()> {
-            config::save(&self.cfg_paths, &self.cfg)?;
+            // Try to save password to keyring first if needed
             if self.cfg.mqtt.remember_password {
                 if let Some(secret) = &self.password {
                     secrets::save_password(secret)?;
@@ -147,6 +147,8 @@ impl Air1App {
             } else {
                 secrets::delete_password()?;
             }
+            // Only save config after keyring operations succeed
+            config::save(&self.cfg_paths, &self.cfg)?;
             Ok(())
         };
 
@@ -156,7 +158,15 @@ impl Air1App {
                 self.last_save = Some(Instant::now());
             }
             Err(err) => {
-                self.status = format!("Save failed: {err:#}");
+                // Check if this is a keyring error
+                let err_str = format!("{err:#}");
+                if err_str.contains("keyring") {
+                    self.keyring_unavailable = true;
+                    self.cfg.mqtt.remember_password = false;
+                    self.status = "Keyring unavailable; password not saved".to_string();
+                } else {
+                    self.status = format!("Save failed: {err:#}");
+                }
             }
         }
     }
@@ -433,18 +443,19 @@ impl Air1App {
 
         ui.horizontal(|ui| {
             let mut remember = self.cfg.mqtt.remember_password;
-            if ui
-                .checkbox(&mut remember, "Remember password in system keyring")
-                .changed()
-            {
-                self.cfg.mqtt.remember_password = remember;
-                if remember && self.password.is_none() {
-                    self.status = "Enter a password to store".to_string();
-                } else {
-                    // Auto-save when checkbox changes
+            ui.add_enabled_ui(!self.keyring_unavailable, |ui| {
+                if ui
+                    .checkbox(&mut remember, "Remember password in system keyring")
+                    .changed()
+                {
+                    self.cfg.mqtt.remember_password = remember;
+                    // Always save config when checkbox changes
                     self.save_all();
+                    if remember && self.password.is_none() {
+                        self.status = "Enter a password to store".to_string();
+                    }
                 }
-            }
+            });
             if self.keyring_unavailable {
                 ui.label(
                     egui::RichText::new("Keyring unavailable; using session-only")
