@@ -15,4 +15,4 @@ mcpServers:
       - "-y"
       - "tavily-mcp@latest"
     env:
-      TAVILY_API_KEY: "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"
+      TAVILY_API_KEY: "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" 
