@@ -438,11 +438,10 @@ impl Air1App {
                 .changed()
             {
                 self.cfg.mqtt.remember_password = remember;
+                // Always save config when checkbox changes
+                self.save_all();
                 if remember && self.password.is_none() {
                     self.status = "Enter a password to store".to_string();
-                } else {
-                    // Auto-save when checkbox changes
-                    self.save_all();
                 }
             }
             if self.keyring_unavailable {
