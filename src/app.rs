@@ -436,6 +436,9 @@ impl Air1App {
                 self.cfg.mqtt.remember_password = remember;
                 if remember && self.password.is_none() {
                     self.status = "Enter a password to store".to_string();
+                } else {
+                    // Auto-save when checkbox changes
+                    self.save_all();
                 }
             }
             if self.keyring_unavailable {
@@ -520,7 +523,7 @@ impl App for Air1App {
         self.poll_mqtt();
 
         // Check for viewport size changes and request repaint for smooth resizing
-        let current_size = ctx.screen_rect().size();
+        let current_size = ctx.content_rect().size();
         if let Some(last_size) = self.last_viewport_size {
             if (current_size.x - last_size.x).abs() > 0.1 || (current_size.y - last_size.y).abs() > 0.1 {
                 ctx.request_repaint();
