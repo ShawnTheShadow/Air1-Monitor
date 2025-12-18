@@ -1,6 +1,6 @@
 # Maintainer: ShawnTheShadow <shawn@stsg.io>
 pkgname=air1-monitor
-pkgver=0.1.4.r45
+pkgver=0.1.4.r46
 pkgrel=1
 pkgdesc="Air1 Monitor - MQTT monitoring application"
 arch=('x86_64')
@@ -40,4 +40,6 @@ check() {
 package() {
     cd "$startdir"
     install -Dm755 "target/release/$pkgname" "$pkgdir/usr/bin/$pkgname"
+    install -Dm644 "air1-monitor.desktop" "$pkgdir/usr/share/applications/$pkgname.desktop"
+    install -Dm644 "Air1MQTT.png" "$pkgdir/usr/share/pixmaps/$pkgname.png"
 }

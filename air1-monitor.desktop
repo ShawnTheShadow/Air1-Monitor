@@ -1,0 +1,9 @@
+[Desktop Entry]
+Name=Air1 Monitor
+Comment=MQTT monitoring application for Air Quality sensors
+Exec=air1-monitor
+Icon=air1-monitor
+Terminal=false
+Type=Application
+Categories=Utility;Monitor;Network;
+Keywords=mqtt;air;quality;monitor;sensor;
