@@ -405,6 +405,10 @@ impl Air1App {
                 } else {
                     Some(masked)
                 };
+                // Auto-save password when remember_password is checked
+                if self.cfg.mqtt.remember_password {
+                    self.save_all();
+                }
             }
         });
 
