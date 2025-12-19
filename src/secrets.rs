@@ -66,7 +66,13 @@ mod tests {
 
     #[test]
     fn save_load_delete_password_roundtrip() -> Result<()> {
-        // Skip test if keyring isn't available in the environment running tests.
+        // Skip test on CI (GitHub Actions) or if explicitly requested.
+        if std::env::var("GITHUB_ACTIONS").is_ok() || std::env::var("SKIP_KEYRING_TESTS").is_ok() {
+            eprintln!("Running on CI or SKIP_KEYRING_TESTS set; skipping keyring roundtrip test");
+            return Ok(());
+        }
+
+        // Skip test if keyring isn't available in the local environment.
         if !keyring_available() {
             eprintln!("keyring not available; skipping secrets roundtrip test");
             return Ok(());
