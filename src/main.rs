@@ -52,9 +52,15 @@ fn main() -> eframe::Result<()> {
         ..Default::default()
     };
 
-    eframe::run_native(
+    let res = eframe::run_native(
         &window_title,
         native_options,
         Box::new(|_cc| Ok(Box::new(Air1App::init()))),
-    )
+    );
+
+    if let Err(err) = &res {
+        tracing::error!("GUI runtime error: {:#}", err);
+    }
+
+    res
 }
