@@ -54,6 +54,16 @@ pub struct Air1App {
     last_viewport_size: Option<egui::Vec2>,
 }
 
+#[derive(Copy, Clone)]
+struct ArcSpec {
+    center: egui::Pos2,
+    radius: f32,
+    start_angle: f32,
+    end_angle: f32,
+    width: f32,
+    color: egui::Color32,
+}
+
 impl Default for Air1App {
     fn default() -> Self {
         let cfg_paths = config::ConfigPaths::default();
@@ -327,16 +337,14 @@ impl Air1App {
                 ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
                     let mut warnings = Vec::new();
 
-                    if let Some(co2) = self.metrics.co2 {
-                        if co2 > 2000.0 {
+                    if let Some(co2) = self.metrics.co2
+                        && co2 > 2000.0 {
                             warnings.push(format!("! High CO₂: {:.0} ppm", co2));
-                        }
                     }
 
-                    if let Some(tvoc) = self.metrics.tvoc {
-                        if tvoc > 2200.0 {
+                    if let Some(tvoc) = self.metrics.tvoc
+                        && tvoc > 2200.0 {
                             warnings.push(format!("! High VOC: {:.0} ppb", tvoc));
-                        }
                     }
 
                     if !warnings.is_empty() {
@@ -550,10 +558,9 @@ impl App for Air1App {
 
         // Check for viewport size changes and request repaint for smooth resizing
         let current_size = ctx.content_rect().size();
-        if let Some(last_size) = self.last_viewport_size {
-            if (current_size.x - last_size.x).abs() > 0.1 || (current_size.y - last_size.y).abs() > 0.1 {
+        if let Some(last_size) = self.last_viewport_size
+            && ((current_size.x - last_size.x).abs() > 0.1 || (current_size.y - last_size.y).abs() > 0.1) {
                 ctx.request_repaint();
-            }
         }
         self.last_viewport_size = Some(current_size);
 
@@ -564,10 +571,9 @@ impl App for Air1App {
             ui.horizontal(|ui| {
                 ui.heading("Air 1 MQTT Monitor (Rust + egui)");
                 ui.label(format!("Status: {}", self.status));
-                if !self.status.is_empty() {
-                    if ui.small_button("Details").clicked() {
+                if !self.status.is_empty()
+                    && ui.small_button("Details").clicked() {
                         self.show_error_dialog = true;
-                    }
                 }
             });
         });
@@ -864,12 +870,14 @@ impl Air1App {
             let color = Self::get_quality_color(*min, ranges);
             self.draw_arc(
                 &painter,
-                center,
-                radius,
-                segment_start,
-                segment_end,
-                stroke_width,
-                color.linear_multiply(0.3),
+                ArcSpec {
+                    center,
+                    radius,
+                    start_angle: segment_start,
+                    end_angle: segment_end,
+                    width: stroke_width,
+                    color: color.linear_multiply(0.3),
+                },
             );
         }
 
@@ -879,12 +887,14 @@ impl Air1App {
         let value_color = Self::get_quality_color(value, ranges);
         self.draw_arc(
             &painter,
-            center,
-            radius,
-            arc_start,
-            value_angle,
-            stroke_width,
-            value_color,
+            ArcSpec {
+                center,
+                radius,
+                start_angle: arc_start,
+                end_angle: value_angle,
+                width: stroke_width,
+                color: value_color,
+            },
         );
 
         // Draw needle
@@ -904,27 +914,18 @@ impl Air1App {
         painter.circle_stroke(center, 6.0, egui::Stroke::new(2.0, egui::Color32::WHITE));
     }
 
-    fn draw_arc(
-        &self,
-        painter: &egui::Painter,
-        center: egui::Pos2,
-        radius: f32,
-        start_angle: f32,
-        end_angle: f32,
-        width: f32,
-        color: egui::Color32,
-    ) {
+    fn draw_arc(&self, painter: &egui::Painter, spec: ArcSpec) {
         let segments = 32;
-        let angle_step = (end_angle - start_angle) / segments as f32;
+        let angle_step = (spec.end_angle - spec.start_angle) / segments as f32;
 
         for i in 0..segments {
-            let a1 = start_angle + angle_step * i as f32;
-            let a2 = start_angle + angle_step * (i + 1) as f32;
+            let a1 = spec.start_angle + angle_step * i as f32;
+            let a2 = spec.start_angle + angle_step * (i + 1) as f32;
 
-            let p1 = center + egui::Vec2::new(radius * a1.cos(), radius * a1.sin());
-            let p2 = center + egui::Vec2::new(radius * a2.cos(), radius * a2.sin());
+            let p1 = spec.center + egui::Vec2::new(spec.radius * a1.cos(), spec.radius * a1.sin());
+            let p2 = spec.center + egui::Vec2::new(spec.radius * a2.cos(), spec.radius * a2.sin());
 
-            painter.line_segment([p1, p2], egui::Stroke::new(width, color));
+            painter.line_segment([p1, p2], egui::Stroke::new(spec.width, spec.color));
         }
     }
 

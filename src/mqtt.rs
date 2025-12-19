@@ -205,7 +205,7 @@ fn map_publish(p: &rumqttc::Publish) -> Option<crate::app::MqttEvent> {
     let topic = p.topic.clone();
     let payload = String::from_utf8_lossy(&p.payload).trim().to_string();
     let segments = topic.split('/').collect::<Vec<_>>();
-    if segments.len() < 1 {
+    if segments.is_empty() {
         return None;
     }
     let name = *segments.last()?; // sensor name is last path component
