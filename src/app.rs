@@ -42,6 +42,7 @@ pub struct Air1App {
     pub keyring_unavailable: bool,
     pub testing: bool,
     pub show_error_dialog: bool,
+    pub show_keyring_help: bool,
     test_rx: mpsc::Receiver<TestResult>,
     test_tx: mpsc::Sender<TestResult>,
     mqtt_rx: mpsc::Receiver<MqttEvent>,
@@ -68,6 +69,7 @@ impl Default for Air1App {
             keyring_unavailable: false,
             testing: false,
             show_error_dialog: false,
+            show_keyring_help: false,
             test_rx,
             test_tx,
             mqtt_rx,
@@ -128,6 +130,7 @@ impl Air1App {
             keyring_unavailable,
             testing: false,
             show_error_dialog: false,
+            show_keyring_help: false,
             test_rx: rx,
             test_tx: tx,
             mqtt_rx,
@@ -460,11 +463,16 @@ impl Air1App {
                 }
             });
             if self.keyring_unavailable {
-                ui.label(
-                    egui::RichText::new("Keyring unavailable; using session-only")
-                        .italics()
-                        .color(egui::Color32::YELLOW),
-                );
+                ui.horizontal(|ui| {
+                    ui.label(
+                        egui::RichText::new("Keyring unavailable; using session-only")
+                            .italics()
+                            .color(egui::Color32::YELLOW),
+                    );
+                    if ui.small_button("Why?").clicked() {
+                        self.show_keyring_help = true;
+                    }
+                });
             }
         });
 
@@ -757,6 +765,23 @@ impl App for Air1App {
                     ui.separator();
                     if ui.button("Close").clicked() {
                         self.show_error_dialog = false;
+                    }
+                });
+        }
+
+        if self.show_keyring_help {
+            egui::Window::new("Keyring unavailable")
+                .collapsible(false)
+                .show(ctx, |ui| {
+                    ui.label("The system keyring is not available. Saved passwords cannot be stored securely without a working keyring.");
+                    ui.add_space(6.0);
+                    ui.label("Common fixes:");
+                    ui.label("- Install / enable a keyring daemon (e.g., GNOME Keyring, KDE Wallet).");
+                    ui.label("- Ensure `libsecret` and platform keyring integration are installed.");
+                    ui.label("- On headless systems or containers, disable 'Remember password' or provide a session keyring.");
+                    ui.separator();
+                    if ui.button("Got it").clicked() {
+                        self.show_keyring_help = false;
                     }
                 });
         }
