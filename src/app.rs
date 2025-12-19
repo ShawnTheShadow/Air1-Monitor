@@ -41,6 +41,7 @@ pub struct Air1App {
     pub last_save: Option<Instant>,
     pub keyring_unavailable: bool,
     pub testing: bool,
+    pub show_error_dialog: bool,
     test_rx: mpsc::Receiver<TestResult>,
     test_tx: mpsc::Sender<TestResult>,
     mqtt_rx: mpsc::Receiver<MqttEvent>,
@@ -66,6 +67,7 @@ impl Default for Air1App {
             last_save: None,
             keyring_unavailable: false,
             testing: false,
+            show_error_dialog: false,
             test_rx,
             test_tx,
             mqtt_rx,
@@ -125,6 +127,7 @@ impl Air1App {
             last_save: None,
             keyring_unavailable,
             testing: false,
+            show_error_dialog: false,
             test_rx: rx,
             test_tx: tx,
             mqtt_rx,
@@ -553,6 +556,11 @@ impl App for Air1App {
             ui.horizontal(|ui| {
                 ui.heading("Air 1 MQTT Monitor (Rust + egui)");
                 ui.label(format!("Status: {}", self.status));
+                if !self.status.is_empty() {
+                    if ui.small_button("Details").clicked() {
+                        self.show_error_dialog = true;
+                    }
+                }
             });
         });
 
@@ -740,6 +748,18 @@ impl App for Air1App {
                     }
                 });
         });
+
+        if self.show_error_dialog {
+            egui::Window::new("Details")
+                .collapsible(false)
+                .show(ctx, |ui| {
+                    ui.label(&self.status);
+                    ui.separator();
+                    if ui.button("Close").clicked() {
+                        self.show_error_dialog = false;
+                    }
+                });
+        }
     }
 }
 

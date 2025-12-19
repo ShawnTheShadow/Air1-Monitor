@@ -1,6 +1,7 @@
 use std::{fs, io::Write, path::PathBuf};
 
 use anyhow::{Context, Result};
+use tracing::warn;
 use directories::ProjectDirs;
 use serde::{Deserialize, Serialize};
 
@@ -56,9 +57,15 @@ impl ConfigPaths {
 
 impl Default for ConfigPaths {
     fn default() -> Self {
-        ConfigPaths::new().unwrap_or_else(|_| ConfigPaths {
-            config_file: PathBuf::from("config.toml"),
-        })
+        match ConfigPaths::new() {
+            Ok(p) => p,
+            Err(err) => {
+                warn!("ConfigPaths::default fallback: {:#}", err);
+                ConfigPaths {
+                    config_file: PathBuf::from("config.toml"),
+                }
+            }
+        }
     }
 }
 
