@@ -775,10 +775,20 @@ impl App for Air1App {
                 .show(ctx, |ui| {
                     ui.label("The system keyring is not available. Saved passwords cannot be stored securely without a working keyring.");
                     ui.add_space(6.0);
-                    ui.label("Common fixes:");
-                    ui.label("- Install / enable a keyring daemon (e.g., GNOME Keyring, KDE Wallet).");
-                    ui.label("- Ensure `libsecret` and platform keyring integration are installed.");
-                    ui.label("- On headless systems or containers, disable 'Remember password' or provide a session keyring.");
+                    ui.label("Common fixes and distro-specific commands:");
+                    ui.label("  • Ubuntu / Debian: sudo apt install gnome-keyring libsecret-1-0");
+                    ui.label("  • Fedora: sudo dnf install gnome-keyring libsecret");
+                    ui.label("  • Arch / Manjaro: sudo pacman -S gnome-keyring libsecret");
+                    ui.label("  • openSUSE: sudo zypper install gnome-keyring libsecret");
+                    ui.add_space(4.0);
+                    ui.label("Notes:");
+                    ui.label("  • On desktop environments, ensure the keyring daemon (GNOME Keyring or KDE Wallet) is running and unlocked at session start.");
+                    ui.label("  • On headless servers or containers, there may be no system keyring available — disable 'Remember password' in settings.");
+                    ui.add_space(4.0);
+                    ui.label("Further reading:");
+                    ui.label("  • GNOME Keyring: https://wiki.gnome.org/Projects/GnomeKeyring");
+                    ui.label("  • libsecret: https://developer.gnome.org/libsecret/");
+                    ui.add_space(6.0);
                     ui.separator();
                     if ui.button("Got it").clicked() {
                         self.show_keyring_help = false;
