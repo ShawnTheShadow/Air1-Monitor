@@ -3,6 +3,7 @@ name: CI
 on:
   push:
   pull_request:
+  workflow_dispatch:
 
 jobs:
   test:
@@ -20,12 +21,7 @@ jobs:
 
       - name: Run tests
         run: cargo test --workspace --verbose
-name: CI
 
-on:
-  workflow_dispatch:  # Manual triggering only
-
-jobs:
   check:
     runs-on: ubuntu-latest
     steps:
