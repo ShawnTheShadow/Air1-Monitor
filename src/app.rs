@@ -105,8 +105,8 @@ impl Air1App {
         let (tx, rx) = mpsc::channel();
         let (mqtt_tx, mqtt_rx) = mpsc::channel();
 
-        let mut keyring_unavailable = false;
-        let password = if cfg.mqtt.remember_password {
+        let mut keyring_unavailable = !secrets::keyring_available();
+        let password = if cfg.mqtt.remember_password && !keyring_unavailable {
             match secrets::load_password() {
                 Ok(secret) => secret,
                 Err(err) => {
