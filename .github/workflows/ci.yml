@@ -1,6 +1,28 @@
 name: CI
 
 on:
+  push:
+  pull_request:
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    env:
+      SKIP_KEYRING_TESTS: "1"
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install Rust toolchain
+        uses: actions-rs/toolchain@v1
+        with:
+          toolchain: stable
+          profile: minimal
+
+      - name: Run tests
+        run: cargo test --workspace --verbose
+name: CI
+
+on:
   workflow_dispatch:  # Manual triggering only
 
 jobs:
