@@ -4,6 +4,9 @@ version = "0.1.5"
 edition = "2024"
 build = "build.rs"
 
+[lib]
+name = "air1_monitor"
+
 [dependencies]
 anyhow = "1.0"
 directories = "6.0"
