@@ -43,6 +43,7 @@ pub struct Air1App {
     pub testing: bool,
     pub show_error_dialog: bool,
     pub show_keyring_help: bool,
+    pub show_config_modal: bool,
     test_rx: mpsc::Receiver<TestResult>,
     test_tx: mpsc::Sender<TestResult>,
     mqtt_rx: mpsc::Receiver<MqttEvent>,
@@ -80,6 +81,7 @@ impl Default for Air1App {
             testing: false,
             show_error_dialog: false,
             show_keyring_help: false,
+            show_config_modal: false,
             test_rx,
             test_tx,
             mqtt_rx,
@@ -141,6 +143,7 @@ impl Air1App {
             testing: false,
             show_error_dialog: false,
             show_keyring_help: false,
+            show_config_modal: false,
             test_rx: rx,
             test_tx: tx,
             mqtt_rx,
@@ -338,13 +341,15 @@ impl Air1App {
                     let mut warnings = Vec::new();
 
                     if let Some(co2) = self.metrics.co2
-                        && co2 > 2000.0 {
-                            warnings.push(format!("! High CO₂: {:.0} ppm", co2));
+                        && co2 > 2000.0
+                    {
+                        warnings.push(format!("! High CO₂: {:.0} ppm", co2));
                     }
 
                     if let Some(tvoc) = self.metrics.tvoc
-                        && tvoc > 2200.0 {
-                            warnings.push(format!("! High VOC: {:.0} ppb", tvoc));
+                        && tvoc > 2200.0
+                    {
+                        warnings.push(format!("! High VOC: {:.0} ppb", tvoc));
                     }
 
                     if !warnings.is_empty() {
@@ -508,31 +513,6 @@ impl Air1App {
             if ui.button("Forget saved password").clicked() {
                 self.forget_password();
             }
-            if ui
-                .add_enabled(self.mqtt_handle.is_none(), egui::Button::new("Start MQTT"))
-                .clicked()
-            {
-                if self.cfg.mqtt.username.is_some() && self.password.is_none() {
-                    self.status = "Password required when username is set".to_string();
-                    return;
-                }
-                let cfg = self.cfg.clone();
-                let password = self.password.clone();
-                let tx = self.mqtt_tx.clone();
-                let (stop_tx, stop_rx) = mpsc::channel();
-                self.status = "Starting MQTT listener...".to_string();
-                let handle = std::thread::spawn(move || {
-                    let _ = mqtt::run_listener(cfg.mqtt, password.as_deref(), tx, stop_rx);
-                });
-                self.mqtt_handle = Some(handle);
-                self.mqtt_stop = Some(stop_tx);
-            }
-            if ui
-                .add_enabled(self.mqtt_handle.is_some(), egui::Button::new("Stop MQTT"))
-                .clicked()
-            {
-                self.stop_mqtt();
-            }
             if let Some(t) = self.last_save {
                 ui.label(format!("Last saved {}s ago", t.elapsed().as_secs()));
             }
@@ -559,8 +539,10 @@ impl App for Air1App {
         // Check for viewport size changes and request repaint for smooth resizing
         let current_size = ctx.content_rect().size();
         if let Some(last_size) = self.last_viewport_size
-            && ((current_size.x - last_size.x).abs() > 0.1 || (current_size.y - last_size.y).abs() > 0.1) {
-                ctx.request_repaint();
+            && ((current_size.x - last_size.x).abs() > 0.1
+                || (current_size.y - last_size.y).abs() > 0.1)
+        {
+            ctx.request_repaint();
         }
         self.last_viewport_size = Some(current_size);
 
@@ -569,11 +551,18 @@ impl App for Air1App {
 
         egui::TopBottomPanel::top("status").show(ctx, |ui| {
             ui.horizontal(|ui| {
+                ui.menu_button("Menu", |ui| {
+                    ui.menu_button("View", |ui| {
+                        if ui.button("Configuration").clicked() {
+                            self.show_config_modal = true;
+                            ui.close();
+                        }
+                    });
+                });
                 ui.heading("Air 1 MQTT Monitor (Rust + egui)");
                 ui.label(format!("Status: {}", self.status));
-                if !self.status.is_empty()
-                    && ui.small_button("Details").clicked() {
-                        self.show_error_dialog = true;
+                if !self.status.is_empty() && ui.small_button("Details").clicked() {
+                    self.show_error_dialog = true;
                 }
             });
         });
@@ -587,10 +576,6 @@ impl App for Air1App {
                         self.draw_overall_quality(ui);
                         ui.add_space(8.0);
                     }
-
-                    egui::CollapsingHeader::new("Connection Settings")
-                        .default_open(true)
-                        .show(ui, |ui| self.draw_settings(ui));
 
                     ui.separator();
                     ui.heading("Live dashboard");
@@ -628,6 +613,45 @@ impl App for Air1App {
                         );
                         if let Some(ts) = self.metrics.last_update {
                             ui.label(format!("Last update: {}s ago", ts.elapsed().as_secs()));
+                        }
+                    });
+
+                    ui.add_space(8.0);
+
+                    // MQTT Control Buttons
+                    ui.horizontal(|ui| {
+                        if ui
+                            .add_enabled(
+                                self.mqtt_handle.is_none(),
+                                egui::Button::new("Start MQTT"),
+                            )
+                            .clicked()
+                        {
+                            if self.cfg.mqtt.username.is_some() && self.password.is_none() {
+                                self.status = "Password required when username is set".to_string();
+                            } else {
+                                let cfg = self.cfg.clone();
+                                let password = self.password.clone();
+                                let tx = self.mqtt_tx.clone();
+                                let (stop_tx, stop_rx) = mpsc::channel();
+                                self.status = "Starting MQTT listener...".to_string();
+                                let handle = std::thread::spawn(move || {
+                                    let _ = mqtt::run_listener(
+                                        cfg.mqtt,
+                                        password.as_deref(),
+                                        tx,
+                                        stop_rx,
+                                    );
+                                });
+                                self.mqtt_handle = Some(handle);
+                                self.mqtt_stop = Some(stop_tx);
+                            }
+                        }
+                        if ui
+                            .add_enabled(self.mqtt_handle.is_some(), egui::Button::new("Stop MQTT"))
+                            .clicked()
+                        {
+                            self.stop_mqtt();
                         }
                     });
 
@@ -798,6 +822,21 @@ impl App for Air1App {
                     ui.separator();
                     if ui.button("Got it").clicked() {
                         self.show_keyring_help = false;
+                    }
+                });
+        }
+
+        if self.show_config_modal {
+            egui::Window::new("Configuration")
+                .collapsible(false)
+                .resizable(true)
+                .show(ctx, |ui| {
+                    ui.heading("Connection Settings");
+                    ui.separator();
+                    self.draw_settings(ui);
+                    ui.separator();
+                    if ui.button("Close").clicked() {
+                        self.show_config_modal = false;
                     }
                 });
         }

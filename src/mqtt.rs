@@ -7,12 +7,12 @@ use std::{
 };
 
 use anyhow::{Context, Result};
-use tracing::error;
 use rumqttc::tokio_rustls::rustls::{
     ClientConfig, RootCertStore,
     pki_types::{CertificateDer, pem::PemObject},
 };
 use rumqttc::{Client, Event, MqttOptions, Packet, QoS, TlsConfiguration, Transport};
+use tracing::error;
 
 use crate::config::MqttConfig;
 
@@ -93,11 +93,11 @@ pub fn run_listener(
                     }
                 }
                 Ok(_) => {}
-                    Err(err) => {
-                        error!("MQTT connection error: {:#}", err);
-                        disconnect_reason = Some(format!("{err:#}"));
-                        break;
-                    }
+                Err(err) => {
+                    error!("MQTT connection error: {:#}", err);
+                    disconnect_reason = Some(format!("{err:#}"));
+                    break;
+                }
             }
         }
 

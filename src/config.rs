@@ -1,9 +1,9 @@
 use std::{fs, io::Write, path::PathBuf};
 
 use anyhow::{Context, Result};
-use tracing::warn;
 use directories::ProjectDirs;
 use serde::{Deserialize, Serialize};
+use tracing::warn;
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct MqttConfig {

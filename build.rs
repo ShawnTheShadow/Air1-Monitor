@@ -12,7 +12,7 @@ fn main() {
 
     // Set the version with git suffix
     println!("cargo:rustc-env=CARGO_PKG_VERSION_GIT={}", commit_count);
-    
+
     // Rerun if git state changes
     println!("cargo:rerun-if-changed=.git/HEAD");
     println!("cargo:rerun-if-changed=.git/refs");
