@@ -1,7 +1,6 @@
 # Rust build artifacts
 air1-monitor/target/
 **/target/
-Cargo.lock
 
 # IDE specific files
 .vscode/
