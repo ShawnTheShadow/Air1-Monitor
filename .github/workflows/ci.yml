@@ -49,16 +49,16 @@ jobs:
           key: ${{ runner.os }}-target-${{ hashFiles('**/Cargo.lock') }}
       
       - name: Check formatting
-        run: cd air1-monitor && cargo fmt --check
+        run: cargo fmt --check
       
       - name: Run clippy
-        run: cd air1-monitor && cargo clippy -- -D warnings
+        run: cargo clippy -- -D warnings
       
       - name: Run tests
-        run: cd air1-monitor && cargo test
+        run: cargo test
       
       - name: Check build
-        run: cd air1-monitor && cargo check
+        run: cargo check
 
   security:
     runs-on: ubuntu-latest
@@ -84,4 +84,4 @@ jobs:
           curl -L https://github.com/kbknapp/cargo-outdated/releases/download/v0.15.0/cargo-outdated-v0.15.0-x86_64-unknown-linux-musl.tar.gz | tar xz -C ~/.cargo/bin
       
       - name: Run cargo outdated
-        run: cd air1-monitor && cargo outdated --exit-code 1 || true
+        run: cargo outdated --exit-code 1 || true
