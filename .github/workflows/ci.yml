@@ -22,6 +22,18 @@ jobs:
       - name: Run tests
         run: cargo test --workspace --verbose
 
+      - name: Create issue on failure
+        if: failure()
+        uses: actions/github-script@v7
+        with:
+          script: |
+            github.rest.issues.create({
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              title: 'CI Test Job Failed',
+              body: `The CI test job failed on run: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}\n\nPlease check the logs for details.`
+            });
+
   check:
     runs-on: ubuntu-latest
     steps:
