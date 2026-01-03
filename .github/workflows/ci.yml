@@ -97,7 +97,7 @@ jobs:
         with:
           token: ${{ secrets.GITEA_TOKEN }}
           ignore: RUSTSEC-2024-0436
-          cache: true   # cache advisory DB
+          #cache: true   # cache advisory DB
 
   # --------------------------------------------------------------
   # 3️⃣ Out-of-date dependencies (run only on PRs)
@@ -114,36 +114,11 @@ jobs:
 
       - name: Install cargo‑outdated (binary)
         run: |
-          curl -L https://github.com/kbknapp/cargo-outdated/releases/download/v0.15.0/cargo-outdated-v0.15.0-x86_64-unknown-linux-musl.tar.gz \
+          curl -L https://github.com/kbknapp/cargo-outdated/releases/download/v0.18.0/cargo-outdated-0.18.0-x86_64-unknown-linux-musl.tar.gz \
             | tar xz -C ~/.cargo/bin
 
       - name: Run cargo outdated (fail on any outdated crate)
         run: cargo outdated --exit-code 1
-
-  # --------------------------------------------------------------
-  # 4️⃣ (Optional) Code coverage with tarpaulin
-  # --------------------------------------------------------------
-  coverage:
-    runs-on: ubuntu-latest
-    needs: check
-    if: github.event_name != 'push'   # run on PRs / manual dispatch
-    steps:
-      - uses: actions/checkout@v4
-
-      - name: Install Rust
-        uses: dtolnay/rust-toolchain@stable
-
-      - name: Install tarpaulin
-        run: cargo install cargo-tarpaulin --locked
-
-      - name: Run coverage
-        run: cargo tarpaulin --out Xml
-
-      - name: Upload coverage artifact
-        uses: actions/upload-artifact@v4
-        with:
-          name: coverage-xml
-          path: coverage.xml
 
   # --------------------------------------------------------------
   # 5️⃣ (Optional) Release build – runs only on tags
@@ -172,14 +147,14 @@ jobs:
   # --------------------------------------------------------------
   notify:
     runs-on: ubuntu-latest
-    needs: [check, security, outdated, coverage, release]
+    needs: [check, security, outdated, release]
     if: failure()
     steps:
       - name: Create issue on failure (Gitea API)
         env:
-          GITEA_API_URL: ${{ env.GITEA_API_URL }}
+          GITEA_API_URL: ${{ github.server_url }}
           GITEA_TOKEN: ${{ env.GITEA_TOKEN }}
-          GITEA_REPO: ${{ env.GITEA_REPO }}
+          GITEA_REPO: ${{ github.repository }}
           GITEA_RUN_URL: ${{ env.GITEA_RUN_URL }}
         run: |
           curl -s -X POST "${GITEA_API_URL}/repos/${GITEA_REPO}/issues" \
