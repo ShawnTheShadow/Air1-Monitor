@@ -6,10 +6,12 @@ on:
   workflow_dispatch:
 
 env:
-  # Gitea‑specific env vars – adjust if your runner does not expose them automatically
-  GITEA_API_URL: ${{ secrets.GITEA_API_URL }}   # e.g. https://git.mycompany.com/api/v1
-  GITEA_TOKEN: ${{ secrets.GITEA_TOKEN }}      # personal access token with repo:write scope
-  GITEA_REPO: ${{ github.repository }}         # owner/repo (works the same as GitHub)
+  # Set these two secrets in your Gitea repository settings
+  #   GITEA_API_URL – e.g. https://git.mycompany.com/api/v1
+  #   GITEA_TOKEN   – a personal‑access‑token with repo write scope
+  GITEA_API_URL: ${{ secrets.GITEA_API_URL }}
+  GITEA_TOKEN: ${{ secrets.GITEA_TOKEN }}
+  GITEA_REPO: ${{ github.repository }}
   GITEA_RUN_URL: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}
 
 jobs:
@@ -20,7 +22,7 @@ jobs:
     runs-on: ubuntu-latest
     strategy:
       matrix:
-        rust: [stable]               # add beta/nightly if you like
+        rust: [stable]   # add beta/nightly later if you wish
     steps:
       - uses: actions/checkout@v4
 
@@ -69,11 +71,12 @@ jobs:
         run: |
           mkdir -p artifacts
           cargo test --workspace --verbose 2>&1 | tee artifacts/test.log
+
       - name: Upload test logs
         if: failure()
         uses: actions/upload-artifact@v4
         with:
-          name: test‑logs
+          name: test-logs
           path: artifacts/
 
   # --------------------------------------------------------------
@@ -93,8 +96,7 @@ jobs:
         with:
           token: ${{ secrets.GITEA_TOKEN }}
           ignore: RUSTSEC-2024-0436
-          # Enable caching of the advisory DB (speeds up subsequent runs)
-          cache: true
+          cache: true   # cache advisory DB for faster subsequent runs
 
   # --------------------------------------------------------------
   # 3️⃣ Out‑of‑date dependencies (run only on PRs)
@@ -123,7 +125,7 @@ jobs:
   coverage:
     runs-on: ubuntu-latest
     needs: check
-    if: github.event_name != 'push'   # run on PRs / manual dispatch only
+    if: github.event_name != 'push'   # run on PRs / manual dispatch
     steps:
       - uses: actions/checkout@v4
 
@@ -139,7 +141,7 @@ jobs:
       - name: Upload coverage artifact
         uses: actions/upload-artifact@v4
         with:
-          name: coverage‑xml
+          name: coverage-xml
           path: coverage.xml
 
   # --------------------------------------------------------------
@@ -161,7 +163,7 @@ jobs:
       - name: Upload binary as artifact
         uses: actions/upload-artifact@v4
         with:
-          name: my‑binary
+          name: my-binary
           path: target/release/*
 
   # --------------------------------------------------------------
