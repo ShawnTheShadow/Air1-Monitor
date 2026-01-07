@@ -190,7 +190,7 @@ This project is licensed under the MIT License.
 
 ## Author
 
-**ShawnTheShadow** - [shawn@stsg.io](mailto:contact@stsg.io)
+**ShawnTheShadow** - [contact@stsg.io](mailto:contact@stsg.io)
 
 ## Links
 
