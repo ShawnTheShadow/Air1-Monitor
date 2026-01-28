@@ -120,12 +120,20 @@ impl Air1App {
         let (mqtt_tx, mqtt_rx) = mpsc::channel();
 
         let mut keyring_unavailable = !secrets::keyring_available();
+        let mut status = String::new();
+
         let password = if cfg.mqtt.remember_password && !keyring_unavailable {
             match secrets::load_password() {
-                Ok(secret) => secret,
+                Ok(secret) => {
+                    if secret.is_none() {
+                        status = "Password not found in keyring".to_string();
+                    }
+                    secret
+                }
                 Err(err) => {
                     warn!("keyring load error: {err:?}");
                     keyring_unavailable = true;
+                    status = format!("Keyring error: {err:#}");
                     None
                 }
             }
@@ -137,7 +145,7 @@ impl Air1App {
             cfg_paths,
             cfg,
             password,
-            status: String::new(),
+            status,
             last_save: None,
             keyring_unavailable,
             testing: false,
@@ -180,10 +188,12 @@ impl Air1App {
                 // Check if this is a keyring error
                 let err_str = format!("{err:#}");
                 if err_str.contains("keyring") {
+                    warn!("Keyring save failed: {err:#}");
                     self.keyring_unavailable = true;
                     self.cfg.mqtt.remember_password = false;
-                    self.status = "Keyring unavailable; password not saved".to_string();
+                    self.status = format!("Keyring error: {err:#}");
                 } else {
+                    warn!("Settings save failed: {err:#}");
                     self.status = format!("Save failed: {err:#}");
                 }
             }
@@ -809,6 +819,7 @@ impl App for Air1App {
                     ui.label("  • Ubuntu / Debian: sudo apt install gnome-keyring libsecret-1-0");
                     ui.label("  • Fedora: sudo dnf install gnome-keyring libsecret");
                     ui.label("  • Arch / Manjaro: sudo pacman -S gnome-keyring libsecret");
+                    ui.label("    (KDE users: ensure KWallet is enabled or install gnome-keyring)");
                     ui.label("  • openSUSE: sudo zypper install gnome-keyring libsecret");
                     ui.add_space(4.0);
                     ui.label("Notes:");
