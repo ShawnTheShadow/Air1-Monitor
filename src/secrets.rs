@@ -66,8 +66,8 @@ mod tests {
 
     #[test]
     fn save_load_delete_password_roundtrip() -> Result<()> {
-        // Skip test on CI (GitHub Actions) or if explicitly requested.
-        if std::env::var("GITHUB_ACTIONS").is_ok() || std::env::var("SKIP_KEYRING_TESTS").is_ok() {
+        // Skip test on CI (GitHub Actions, GitLab CI, etc.) or if explicitly requested.
+        if std::env::var("CI").is_ok() || std::env::var("SKIP_KEYRING_TESTS").is_ok() {
             eprintln!("Running on CI or SKIP_KEYRING_TESTS set; skipping keyring roundtrip test");
             return Ok(());
         }
