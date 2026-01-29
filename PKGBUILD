@@ -1,6 +1,6 @@
 # Maintainer: ShawnTheShadow <shawn@stsg.io>
 pkgname=air1-monitor
-pkgver=0.1.4.r71
+pkgver=0.1.4.r105
 pkgrel=1
 pkgdesc="Air1 Monitor - MQTT monitoring application"
 arch=('x86_64')
