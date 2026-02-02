@@ -16,6 +16,7 @@ use tracing::error;
 
 use crate::config::MqttConfig;
 
+/// Test a one-shot MQTT connection and subscribe to a status topic.
 pub fn test_connection(cfg: &MqttConfig, password: Option<&str>) -> Result<()> {
     socket_check(cfg)?;
 
@@ -43,6 +44,7 @@ pub fn test_connection(cfg: &MqttConfig, password: Option<&str>) -> Result<()> {
     anyhow::bail!("MQTT test ended without ConnAck")
 }
 
+/// Run the MQTT listener loop and forward events to the UI thread.
 pub fn run_listener(
     cfg: MqttConfig,
     password: Option<&str>,

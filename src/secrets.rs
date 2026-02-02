@@ -20,6 +20,7 @@ pub fn keyring_available() -> bool {
     }
 }
 
+/// Load the MQTT password from the system keyring if present.
 pub fn load_password() -> Result<Option<String>> {
     let entry = open_entry().context("failed to open keyring entry")?;
     match entry.get_password() {
@@ -35,6 +36,7 @@ pub fn load_password() -> Result<Option<String>> {
     }
 }
 
+/// Save the MQTT password to the system keyring.
 pub fn save_password(secret: &str) -> Result<()> {
     let entry = open_entry().context("failed to open keyring entry")?;
     entry
@@ -43,6 +45,7 @@ pub fn save_password(secret: &str) -> Result<()> {
         .map(|_| ())
 }
 
+/// Delete the MQTT password from the system keyring.
 pub fn delete_password() -> Result<()> {
     let entry = open_entry().context("failed to open keyring entry")?;
     match entry.delete_credential() {
