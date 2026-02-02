@@ -22,28 +22,49 @@ struct Metrics {
     last_update: Option<Instant>,
 }
 
+/// Events emitted by the MQTT background thread.
 pub enum MqttEvent {
+    /// MQTT connection established.
     Connected,
+    /// MQTT connection closed with a reason.
     Disconnected(String),
+    /// A metric payload mapped to a known sensor kind.
     Metric {
+        /// Full MQTT topic for the metric.
         topic: String,
+        /// Parsed numeric value.
         value: f64,
+        /// Normalized metric kind (e.g. "pm25").
         kind: String,
     },
+    /// Human-readable status update.
     Status(String),
 }
 
+/// Main application state and UI controller.
 pub struct Air1App {
+    /// Resolved config file paths.
     pub cfg_paths: config::ConfigPaths,
+    /// Current application configuration.
     pub cfg: config::AppConfig,
+    /// In-memory MQTT password (optional).
     pub password: Option<String>,
+    /// Status message displayed in the UI.
     pub status: String,
+    /// Timestamp of the last successful save.
     pub last_save: Option<Instant>,
+    /// Whether the system keyring is available.
     pub keyring_unavailable: bool,
+    /// Whether an MQTT connection test is running.
     pub testing: bool,
+    /// Show the error details dialog.
     pub show_error_dialog: bool,
+    /// Show keyring help dialog.
     pub show_keyring_help: bool,
+    /// Show configuration modal.
     pub show_config_modal: bool,
+    /// Show layout editor modal.
+    pub show_layout_modal: bool,
     test_rx: mpsc::Receiver<TestResult>,
     test_tx: mpsc::Sender<TestResult>,
     mqtt_rx: mpsc::Receiver<MqttEvent>,
@@ -65,6 +86,91 @@ struct ArcSpec {
     color: egui::Color32,
 }
 
+#[derive(Copy, Clone)]
+struct DashboardSectionDef {
+    id: &'static str,
+    title: &'static str,
+}
+
+#[derive(Copy, Clone)]
+struct GaugeDef {
+    id: &'static str,
+    label: &'static str,
+    unit: &'static str,
+}
+
+const DASHBOARD_SECTIONS: &[DashboardSectionDef] = &[
+    DashboardSectionDef {
+        id: "overview",
+        title: "Overview & Controls",
+    },
+    DashboardSectionDef {
+        id: "air_quality",
+        title: "Air Quality (Particulate Matter)",
+    },
+    DashboardSectionDef {
+        id: "gas",
+        title: "Gas Sensors",
+    },
+    DashboardSectionDef {
+        id: "environment",
+        title: "Environment",
+    },
+];
+
+const GAUGES_BY_SECTION: &[(&str, &[GaugeDef])] = &[
+    (
+        "air_quality",
+        &[
+            GaugeDef {
+                id: "pm25",
+                label: "PM2.5",
+                unit: "μg/m³",
+            },
+            GaugeDef {
+                id: "pm10",
+                label: "PM10",
+                unit: "μg/m³",
+            },
+            GaugeDef {
+                id: "pm1",
+                label: "PM1",
+                unit: "μg/m³",
+            },
+        ],
+    ),
+    (
+        "gas",
+        &[
+            GaugeDef {
+                id: "co2",
+                label: "CO₂",
+                unit: "ppm",
+            },
+            GaugeDef {
+                id: "tvoc",
+                label: "TVOC",
+                unit: "ppb",
+            },
+        ],
+    ),
+    (
+        "environment",
+        &[
+            GaugeDef {
+                id: "temperature",
+                label: "Temperature",
+                unit: "°F",
+            },
+            GaugeDef {
+                id: "humidity",
+                label: "Humidity",
+                unit: "%",
+            },
+        ],
+    ),
+];
+
 impl Default for Air1App {
     fn default() -> Self {
         let cfg_paths = config::ConfigPaths::default();
@@ -82,6 +188,7 @@ impl Default for Air1App {
             show_error_dialog: false,
             show_keyring_help: false,
             show_config_modal: false,
+            show_layout_modal: false,
             test_rx,
             test_tx,
             mqtt_rx,
@@ -96,6 +203,7 @@ impl Default for Air1App {
 }
 
 impl Air1App {
+    /// Initialize the application state and load configuration.
     pub fn init() -> Self {
         let cfg_paths = match config::ConfigPaths::new() {
             Ok(paths) => paths,
@@ -152,6 +260,7 @@ impl Air1App {
             show_error_dialog: false,
             show_keyring_help: false,
             show_config_modal: false,
+            show_layout_modal: false,
             test_rx: rx,
             test_tx: tx,
             mqtt_rx,
@@ -269,6 +378,283 @@ impl Air1App {
             Err(err) => {
                 self.status = format!("Could not remove password: {err:#}");
             }
+        }
+    }
+
+    fn section_title(id: &str) -> String {
+        DASHBOARD_SECTIONS
+            .iter()
+            .find(|section| section.id == id)
+            .map(|section| section.title.to_string())
+            .unwrap_or_else(|| id.to_string())
+    }
+
+    fn gauge_label(gauge_id: &str) -> String {
+        for (_, gauges) in GAUGES_BY_SECTION {
+            if let Some(gauge) = gauges.iter().find(|g| g.id == gauge_id) {
+                return format!("{} ({})", gauge.label, gauge.unit);
+            }
+        }
+        gauge_id.to_string()
+    }
+    fn draw_dashboard_section(&mut self, ui: &mut egui::Ui, id: &str) {
+        match id {
+            "overview" => self.draw_section_overview(ui),
+            "air_quality" => self.draw_section_air_quality(ui),
+            "gas" => self.draw_section_gas(ui),
+            "environment" => self.draw_section_environment(ui),
+            _ => {}
+        }
+    }
+
+    fn draw_section_overview(&mut self, ui: &mut egui::Ui) {
+        if self.connected {
+            self.draw_overall_quality(ui);
+            ui.add_space(8.0);
+        }
+
+        ui.separator();
+        ui.heading("Live dashboard");
+
+        let availability = match (self.connected, self.metrics.last_update) {
+            (false, _) => ("offline", egui::Color32::RED),
+            (true, Some(ts)) => {
+                let age = ts.elapsed();
+                if age.as_secs() <= 15 {
+                    ("fresh", egui::Color32::GREEN)
+                } else if age.as_secs() <= 60 {
+                    ("stale", egui::Color32::YELLOW)
+                } else {
+                    ("stalled", egui::Color32::RED)
+                }
+            }
+            (true, None) => ("no data", egui::Color32::YELLOW),
+        };
+
+        ui.horizontal(|ui| {
+            ui.label(
+                egui::RichText::new(format!(
+                    "Connection: {}",
+                    if self.connected { "online" } else { "offline" }
+                ))
+                .color(if self.connected {
+                    egui::Color32::LIGHT_GREEN
+                } else {
+                    egui::Color32::RED
+                }),
+            );
+            ui.label(
+                egui::RichText::new(format!("Availability: {}", availability.0))
+                    .color(availability.1),
+            );
+            if let Some(ts) = self.metrics.last_update {
+                ui.label(format!("Last update: {}s ago", ts.elapsed().as_secs()));
+            }
+        });
+
+        ui.add_space(8.0);
+
+        ui.horizontal(|ui| {
+            if ui
+                .add_enabled(self.mqtt_handle.is_none(), egui::Button::new("Start MQTT"))
+                .clicked()
+            {
+                if self.cfg.mqtt.username.is_some() && self.password.is_none() {
+                    self.status = "Password required when username is set".to_string();
+                } else {
+                    let cfg = self.cfg.clone();
+                    let password = self.password.clone();
+                    let tx = self.mqtt_tx.clone();
+                    let (stop_tx, stop_rx) = mpsc::channel();
+                    self.status = "Starting MQTT listener...".to_string();
+                    let handle = std::thread::spawn(move || {
+                        let _ = mqtt::run_listener(cfg.mqtt, password.as_deref(), tx, stop_rx);
+                    });
+                    self.mqtt_handle = Some(handle);
+                    self.mqtt_stop = Some(stop_tx);
+                }
+            }
+            if ui
+                .add_enabled(self.mqtt_handle.is_some(), egui::Button::new("Stop MQTT"))
+                .clicked()
+            {
+                self.stop_mqtt();
+            }
+        });
+
+        ui.add_space(8.0);
+    }
+
+    fn draw_section_air_quality(&mut self, ui: &mut egui::Ui) {
+        ui.heading("Air Quality (Particulate Matter)");
+        ui.add_space(4.0);
+
+        if let Some(section) = self
+            .cfg
+            .dashboard
+            .sections
+            .iter()
+            .find(|s| s.id == "air_quality")
+        {
+            ui.horizontal_wrapped(|ui| {
+                for gauge in &section.gauges {
+                    if !gauge.enabled {
+                        continue;
+                    }
+                    match gauge.id.as_str() {
+                        "pm25" => self.gauge_card(
+                            ui,
+                            "PM2.5",
+                            self.metrics.pm25,
+                            "μg/m³",
+                            &[
+                                (0.0, 12.0, "Good"),
+                                (12.0, 35.0, "Moderate"),
+                                (35.0, 55.0, "Unhealthy (Sensitive)"),
+                                (55.0, 150.0, "Unhealthy"),
+                                (150.0, 250.0, "Very Unhealthy"),
+                            ],
+                            250.0,
+                        ),
+                        "pm10" => self.gauge_card(
+                            ui,
+                            "PM10",
+                            self.metrics.pm10,
+                            "μg/m³",
+                            &[
+                                (0.0, 54.0, "Good"),
+                                (54.0, 154.0, "Moderate"),
+                                (154.0, 254.0, "Unhealthy (Sensitive)"),
+                                (254.0, 354.0, "Unhealthy"),
+                                (354.0, 424.0, "Very Unhealthy"),
+                            ],
+                            500.0,
+                        ),
+                        "pm1" => self.gauge_card(
+                            ui,
+                            "PM1",
+                            self.metrics.pm1,
+                            "μg/m³",
+                            &[
+                                (0.0, 10.0, "Good"),
+                                (10.0, 25.0, "Moderate"),
+                                (25.0, 50.0, "Unhealthy"),
+                            ],
+                            100.0,
+                        ),
+                        _ => {}
+                    }
+                }
+            });
+        }
+
+        ui.add_space(12.0);
+    }
+
+    fn draw_section_gas(&mut self, ui: &mut egui::Ui) {
+        ui.heading("Gas Sensors");
+        ui.add_space(4.0);
+
+        if let Some(section) = self.cfg.dashboard.sections.iter().find(|s| s.id == "gas") {
+            ui.horizontal_wrapped(|ui| {
+                for gauge in &section.gauges {
+                    if !gauge.enabled {
+                        continue;
+                    }
+                    match gauge.id.as_str() {
+                        "co2" => self.gauge_card(
+                            ui,
+                            "CO₂",
+                            self.metrics.co2,
+                            "ppm",
+                            &[
+                                (0.0, 800.0, "Excellent"),
+                                (800.0, 1000.0, "Good"),
+                                (1000.0, 1500.0, "Acceptable"),
+                                (1500.0, 2000.0, "Poor"),
+                                (2000.0, 5000.0, "Bad"),
+                            ],
+                            5000.0,
+                        ),
+                        "tvoc" => self.gauge_card(
+                            ui,
+                            "TVOC",
+                            self.metrics.tvoc,
+                            "ppb",
+                            &[
+                                (0.0, 220.0, "Excellent"),
+                                (220.0, 660.0, "Good"),
+                                (660.0, 1430.0, "Moderate"),
+                                (1430.0, 2200.0, "Poor"),
+                                (2200.0, 5500.0, "Unhealthy"),
+                            ],
+                            5500.0,
+                        ),
+                        _ => {}
+                    }
+                }
+            });
+        }
+
+        ui.add_space(12.0);
+    }
+
+    fn draw_section_environment(&mut self, ui: &mut egui::Ui) {
+        ui.heading("Environment");
+        ui.add_space(4.0);
+
+        if let Some(section) = self
+            .cfg
+            .dashboard
+            .sections
+            .iter()
+            .find(|s| s.id == "environment")
+        {
+            ui.horizontal_wrapped(|ui| {
+                for gauge in &section.gauges {
+                    if !gauge.enabled {
+                        continue;
+                    }
+                    match gauge.id.as_str() {
+                        "temperature" => self.gauge_card(
+                            ui,
+                            "Temperature",
+                            self.metrics.temp,
+                            "°F",
+                            &[
+                                (32.0, 64.0, "Cool"),
+                                (64.0, 75.0, "Comfortable"),
+                                (75.0, 82.0, "Warm"),
+                                (82.0, 104.0, "Hot"),
+                            ],
+                            104.0,
+                        ),
+                        "humidity" => self.gauge_card(
+                            ui,
+                            "Humidity",
+                            self.metrics.humidity,
+                            "%",
+                            &[
+                                (0.0, 30.0, "Dry"),
+                                (30.0, 60.0, "Comfortable"),
+                                (60.0, 80.0, "Humid"),
+                                (80.0, 100.0, "Very Humid"),
+                            ],
+                            100.0,
+                        ),
+                        _ => {}
+                    }
+                }
+            });
+        }
+
+        if let Some(last) = &self.metrics.last_topic {
+            ui.add_space(6.0);
+            ui.label(
+                egui::RichText::new(format!("Last topic: {last}"))
+                    .italics()
+                    .color(egui::Color32::GRAY),
+            );
         }
     }
 
@@ -567,6 +953,10 @@ impl App for Air1App {
                             self.show_config_modal = true;
                             ui.close();
                         }
+                        if ui.button("Edit layout").clicked() {
+                            self.show_layout_modal = true;
+                            ui.close();
+                        }
                     });
                 });
                 ui.heading("Air 1 MQTT Monitor (Rust + egui)");
@@ -581,218 +971,13 @@ impl App for Air1App {
             egui::ScrollArea::vertical()
                 .auto_shrink([false; 2])
                 .show(ui, |ui| {
-                    // Overall Air Quality Indicator
-                    if self.connected {
-                        self.draw_overall_quality(ui);
-                        ui.add_space(8.0);
-                    }
-
-                    ui.separator();
-                    ui.heading("Live dashboard");
-
-                    let availability = match (self.connected, self.metrics.last_update) {
-                        (false, _) => ("offline", egui::Color32::RED),
-                        (true, Some(ts)) => {
-                            let age = ts.elapsed();
-                            if age.as_secs() <= 15 {
-                                ("fresh", egui::Color32::GREEN)
-                            } else if age.as_secs() <= 60 {
-                                ("stale", egui::Color32::YELLOW)
-                            } else {
-                                ("stalled", egui::Color32::RED)
-                            }
+                    let section_count = self.cfg.dashboard.sections.len();
+                    for idx in 0..section_count {
+                        if !self.cfg.dashboard.sections[idx].enabled {
+                            continue;
                         }
-                        (true, None) => ("no data", egui::Color32::YELLOW),
-                    };
-
-                    ui.horizontal(|ui| {
-                        ui.label(
-                            egui::RichText::new(format!(
-                                "Connection: {}",
-                                if self.connected { "online" } else { "offline" }
-                            ))
-                            .color(if self.connected {
-                                egui::Color32::LIGHT_GREEN
-                            } else {
-                                egui::Color32::RED
-                            }),
-                        );
-                        ui.label(
-                            egui::RichText::new(format!("Availability: {}", availability.0))
-                                .color(availability.1),
-                        );
-                        if let Some(ts) = self.metrics.last_update {
-                            ui.label(format!("Last update: {}s ago", ts.elapsed().as_secs()));
-                        }
-                    });
-
-                    ui.add_space(8.0);
-
-                    // MQTT Control Buttons
-                    ui.horizontal(|ui| {
-                        if ui
-                            .add_enabled(
-                                self.mqtt_handle.is_none(),
-                                egui::Button::new("Start MQTT"),
-                            )
-                            .clicked()
-                        {
-                            if self.cfg.mqtt.username.is_some() && self.password.is_none() {
-                                self.status = "Password required when username is set".to_string();
-                            } else {
-                                let cfg = self.cfg.clone();
-                                let password = self.password.clone();
-                                let tx = self.mqtt_tx.clone();
-                                let (stop_tx, stop_rx) = mpsc::channel();
-                                self.status = "Starting MQTT listener...".to_string();
-                                let handle = std::thread::spawn(move || {
-                                    let _ = mqtt::run_listener(
-                                        cfg.mqtt,
-                                        password.as_deref(),
-                                        tx,
-                                        stop_rx,
-                                    );
-                                });
-                                self.mqtt_handle = Some(handle);
-                                self.mqtt_stop = Some(stop_tx);
-                            }
-                        }
-                        if ui
-                            .add_enabled(self.mqtt_handle.is_some(), egui::Button::new("Stop MQTT"))
-                            .clicked()
-                        {
-                            self.stop_mqtt();
-                        }
-                    });
-
-                    ui.add_space(8.0);
-
-                    // Air Quality Section
-                    ui.heading("Air Quality (Particulate Matter)");
-                    ui.add_space(4.0);
-
-                    ui.horizontal_wrapped(|ui| {
-                        self.gauge_card(
-                            ui,
-                            "PM2.5",
-                            self.metrics.pm25,
-                            "μg/m³",
-                            &[
-                                (0.0, 12.0, "Good"),
-                                (12.0, 35.0, "Moderate"),
-                                (35.0, 55.0, "Unhealthy (Sensitive)"),
-                                (55.0, 150.0, "Unhealthy"),
-                                (150.0, 250.0, "Very Unhealthy"),
-                            ],
-                            250.0,
-                        );
-                        self.gauge_card(
-                            ui,
-                            "PM10",
-                            self.metrics.pm10,
-                            "μg/m³",
-                            &[
-                                (0.0, 54.0, "Good"),
-                                (54.0, 154.0, "Moderate"),
-                                (154.0, 254.0, "Unhealthy (Sensitive)"),
-                                (254.0, 354.0, "Unhealthy"),
-                                (354.0, 424.0, "Very Unhealthy"),
-                            ],
-                            500.0,
-                        );
-                        self.gauge_card(
-                            ui,
-                            "PM1",
-                            self.metrics.pm1,
-                            "μg/m³",
-                            &[
-                                (0.0, 10.0, "Good"),
-                                (10.0, 25.0, "Moderate"),
-                                (25.0, 50.0, "Unhealthy"),
-                            ],
-                            100.0,
-                        );
-                    });
-
-                    ui.add_space(12.0);
-
-                    // Gas Sensors Section
-                    ui.heading("Gas Sensors");
-                    ui.add_space(4.0);
-
-                    ui.horizontal_wrapped(|ui| {
-                        self.gauge_card(
-                            ui,
-                            "CO₂",
-                            self.metrics.co2,
-                            "ppm",
-                            &[
-                                (0.0, 800.0, "Excellent"),
-                                (800.0, 1000.0, "Good"),
-                                (1000.0, 1500.0, "Acceptable"),
-                                (1500.0, 2000.0, "Poor"),
-                                (2000.0, 5000.0, "Bad"),
-                            ],
-                            5000.0,
-                        );
-                        self.gauge_card(
-                            ui,
-                            "TVOC",
-                            self.metrics.tvoc,
-                            "ppb",
-                            &[
-                                (0.0, 220.0, "Excellent"),
-                                (220.0, 660.0, "Good"),
-                                (660.0, 1430.0, "Moderate"),
-                                (1430.0, 2200.0, "Poor"),
-                                (2200.0, 5500.0, "Unhealthy"),
-                            ],
-                            5500.0,
-                        );
-                    });
-
-                    ui.add_space(12.0);
-
-                    // Environment Section
-                    ui.heading("Environment");
-                    ui.add_space(4.0);
-
-                    ui.horizontal_wrapped(|ui| {
-                        self.gauge_card(
-                            ui,
-                            "Temperature",
-                            self.metrics.temp,
-                            "°F",
-                            &[
-                                (32.0, 64.0, "Cool"),
-                                (64.0, 75.0, "Comfortable"),
-                                (75.0, 82.0, "Warm"),
-                                (82.0, 104.0, "Hot"),
-                            ],
-                            104.0,
-                        );
-                        self.gauge_card(
-                            ui,
-                            "Humidity",
-                            self.metrics.humidity,
-                            "%",
-                            &[
-                                (0.0, 30.0, "Dry"),
-                                (30.0, 60.0, "Comfortable"),
-                                (60.0, 80.0, "Humid"),
-                                (80.0, 100.0, "Very Humid"),
-                            ],
-                            100.0,
-                        );
-                    });
-
-                    if let Some(last) = &self.metrics.last_topic {
-                        ui.add_space(6.0);
-                        ui.label(
-                            egui::RichText::new(format!("Last topic: {last}"))
-                                .italics()
-                                .color(egui::Color32::GRAY),
-                        );
+                        let id = self.cfg.dashboard.sections[idx].id.clone();
+                        self.draw_dashboard_section(ui, &id);
                     }
                 });
         });
@@ -849,6 +1034,106 @@ impl App for Air1App {
                     if ui.button("Close").clicked() {
                         self.show_config_modal = false;
                     }
+                });
+        }
+
+        if self.show_layout_modal {
+            egui::Window::new("Edit dashboard layout")
+                .collapsible(false)
+                .resizable(true)
+                .show(ctx, |ui| {
+                    ui.label("Reorder sections, toggle visibility, and customize gauges. Changes apply immediately.");
+                    ui.add_space(6.0);
+
+                    let mut move_up: Option<usize> = None;
+                    let mut move_down: Option<usize> = None;
+                    let len = self.cfg.dashboard.sections.len();
+
+                    for idx in 0..len {
+                        let title = Self::section_title(&self.cfg.dashboard.sections[idx].id);
+                        ui.horizontal(|ui| {
+                            ui.checkbox(&mut self.cfg.dashboard.sections[idx].enabled, "");
+                            ui.label(&title);
+                            ui.with_layout(
+                                egui::Layout::right_to_left(egui::Align::Center),
+                                |ui| {
+                                    if ui
+                                        .add_enabled(idx + 1 < len, egui::Button::new("↓"))
+                                        .clicked()
+                                    {
+                                        move_down = Some(idx);
+                                    }
+                                    if ui.add_enabled(idx > 0, egui::Button::new("↑")).clicked() {
+                                        move_up = Some(idx);
+                                    }
+                                },
+                            );
+                        });
+
+                        // Expand to show gauges for this section
+                        if self.cfg.dashboard.sections[idx].enabled && !self.cfg.dashboard.sections[idx].gauges.is_empty() {
+                            ui.indent("gauge_list", |ui| {
+                                let gauge_len = self.cfg.dashboard.sections[idx].gauges.len();
+                                let mut gauge_move_up: Option<usize> = None;
+                                let mut gauge_move_down: Option<usize> = None;
+
+                                for g_idx in 0..gauge_len {
+                                    let gauge_id = self.cfg.dashboard.sections[idx].gauges[g_idx].id.clone();
+                                    let gauge_label = Self::gauge_label(&gauge_id);
+                                    ui.horizontal(|ui| {
+                                        ui.checkbox(&mut self.cfg.dashboard.sections[idx].gauges[g_idx].enabled, "");
+                                        ui.label(&gauge_label);
+                                        ui.with_layout(
+                                            egui::Layout::right_to_left(egui::Align::Center),
+                                            |ui| {
+                                                if ui.add_enabled(g_idx + 1 < gauge_len, egui::Button::new("↓")).clicked() {
+                                                    gauge_move_down = Some(g_idx);
+                                                }
+                                                if ui.add_enabled(g_idx > 0, egui::Button::new("↑")).clicked() {
+                                                    gauge_move_up = Some(g_idx);
+                                                }
+                                            },
+                                        );
+                                    });
+                                }
+
+                                if let Some(g_idx) = gauge_move_up
+                                    && g_idx > 0
+                                {
+                                    self.cfg.dashboard.sections[idx].gauges.swap(g_idx, g_idx - 1);
+                                }
+                                if let Some(g_idx) = gauge_move_down
+                                    && g_idx + 1 < gauge_len
+                                {
+                                    self.cfg.dashboard.sections[idx].gauges.swap(g_idx, g_idx + 1);
+                                }
+                            });
+                        }
+                    }
+
+                    if let Some(idx) = move_up
+                        && idx > 0
+                    {
+                        self.cfg.dashboard.sections.swap(idx, idx - 1);
+                    }
+                    if let Some(idx) = move_down
+                        && idx + 1 < len
+                    {
+                        self.cfg.dashboard.sections.swap(idx, idx + 1);
+                    }
+
+                    ui.separator();
+                    ui.horizontal(|ui| {
+                        if ui.button("Reset layout").clicked() {
+                            self.cfg.dashboard = config::DashboardConfig::default();
+                        }
+                        if ui.button("Save layout").clicked() {
+                            self.save_all();
+                        }
+                        if ui.button("Close").clicked() {
+                            self.show_layout_modal = false;
+                        }
+                    });
                 });
         }
     }
