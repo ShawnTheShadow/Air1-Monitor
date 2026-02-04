@@ -1,98 +1,22 @@
+include:
+  - component: $CI_SERVER_FQDN/root/rust-ci/full@1.5.0
+
 variables:
-  # Move these inside the project directory so GitLab can cache them
-  CARGO_HOME: $CI_PROJECT_DIR/.cargo
-  RUSTUP_HOME: $CI_PROJECT_DIR/.rustup
-  DEFAULT_RUST_IMAGE: rust:latest
+  DEBIAN_FRONTEND: noninteractive
 
-cache:
-  key: $CI_COMMIT_REF_SLUG
-  paths:
-    - .cargo/
-    - .rustup/
-    - target/
-
-# This ensures every job starts by setting the default toolchain
 before_script:
-  - rustup default stable
+  # Added condition to check for the OS (Debian-based or Alpine) and install packages accordingly.
+  # This code ensures we're using either apt-get (for Debian-based systems) or apk (for Alpine-based systems).
+  - |
+    if command -v apt-get >/dev/null; then
+      echo "Detected Debian-based system. Installing packages with apt-get."
+      apt-get update -qq
+      apt-get install -y -qq libdbus-1-dev pkg-config
+    elif command -v apk >/dev/null; then
+      echo " Detected Alpine-based system. Installing packages with apk."
+      apk add --no-cache dbus-dev pkgconf
+    else
+      echo "Unsupported OS or package manager. Please ensure either apt-get or apk is available."
+      exit 1
+    fi
 
-stages:
-  - test
-  - build
-  - release
-
-test:
-  stage: test
-  image: $DEFAULT_RUST_IMAGE
-  script:
-    - apt-get update && apt-get -y install build-essential perl pkg-config libssl-dev libdbus-1-dev libfontconfig1-dev libxcb1-dev libxcb-render0-dev libxcb-shape0-dev libxcb-xfixes0-dev libxkbcommon-dev
-    - cargo test --verbose
-
-lint:
-  stage: test
-  image: $DEFAULT_RUST_IMAGE
-  before_script:
-    - apt-get update && apt-get -y install build-essential perl pkg-config libssl-dev libdbus-1-dev libfontconfig1-dev libxcb1-dev libxcb-render0-dev libxcb-shape0-dev libxcb-xfixes0-dev libxkbcommon-dev
-    - rustup default stable
-  script:
-    - rustup component add clippy rustfmt
-    - cargo fmt -- --check
-    - cargo clippy -- -D warnings
-
-build:
-  stage: build
-  image: $DEFAULT_RUST_IMAGE
-  services:
-    - name: docker:29.2.1-dind-alpine3.23
-      alias: docker
-  variables:
-    DOCKER_HOST: tcp://docker:2375
-    DOCKER_TLS_CERTDIR: ""
-    CROSS_CONTAINER_ENGINE: docker
-  needs: ["test", "lint"]
-  parallel:
-    matrix:
-      - TARGET: [x86_64-unknown-linux-gnu, x86_64-pc-windows-gnu, aarch64-unknown-linux-gnu, armv7-unknown-linux-gnueabihf]
-  before_script:
-    - rustup default stable
-    - export PATH="$CARGO_HOME/bin:$PATH"
-    # --- NEW: Install Docker CLI so 'cross' can talk to the service ---
-    - apt-get update && apt-get -y install docker.io
-    # --- Verify Docker is talking to the sidecar ---
-    - docker info
-    - |
-      if ! command -v cross &> /dev/null; then
-        cargo install cross --git https://github.com/cross-rs/cross
-      fi
-  script:
-    - cross build --target $TARGET --release --verbose
-    - mkdir -p build_metadata
-    - echo "$CI_JOB_ID" > build_metadata/$TARGET.job_id
-  artifacts:
-    paths:
-      - target/$TARGET/release/air1-monitor*
-      - build_metadata/
-    name: "$TARGET-binary"
-
-release:
-  stage: release
-  image: registry.gitlab.com/gitlab-org/release-cli:latest
-  needs:
-    - build
-  only:
-    - tags
-  script:
-    - |
-      LINUX_GNU_JID=$(cat build_metadata/x86_64-unknown-linux-gnu.job_id)
-      WINDOWS_JID=$(cat build_metadata/x86_64-pc-windows-gnu.job_id)
-      AARCH64_JID=$(cat build_metadata/aarch64-unknown-linux-gnu.job_id)
-      ARMV7_JID=$(cat build_metadata/armv7-unknown-linux-gnueabihf.job_id)
-      
-      release-cli create \
-        --name "Release $CI_COMMIT_TAG" \
-        --description "Release for $CI_COMMIT_TAG" \
-        --tag-name $CI_COMMIT_TAG \
-        --ref $CI_COMMIT_TAG \
-        --assets-link "{\"name\":\"x86_64-unknown-linux-gnu\",\"url\":\"${CI_PROJECT_URL}/-/jobs/${LINUX_GNU_JID}/artifacts/raw/target/x86_64-unknown-linux-gnu/release/air1-monitor\"}" \
-        --assets-link "{\"name\":\"x86_64-pc-windows-gnu\",\"url\":\"${CI_PROJECT_URL}/-/jobs/${WINDOWS_JID}/artifacts/raw/target/x86_64-pc-windows-gnu/release/air1-monitor.exe\"}" \
-        --assets-link "{\"name\":\"aarch64-unknown-linux-gnu\",\"url\":\"${CI_PROJECT_URL}/-/jobs/${AARCH64_JID}/artifacts/raw/target/aarch64-unknown-linux-gnu/release/air1-monitor\"}" \
-        --assets-link "{\"name\":\"armv7-unknown-linux-gnueabihf\",\"url\":\"${CI_PROJECT_URL}/-/jobs/${ARMV7_JID}/artifacts/raw/target/armv7-unknown-linux-gnueabihf/release/air1-monitor\"}"
