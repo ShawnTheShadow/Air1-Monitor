@@ -444,19 +444,35 @@ enabled = true
         // 2. Test parsing into toml::Table to verify structure directly
         // toml 1.0 uses explicit types (Integer is i64)
         let table: toml::Table = toml::from_str(raw).expect("failed to parse into toml::Table");
-        
-        let mqtt = table.get("mqtt").expect("mqtt section missing").as_table().expect("mqtt should be a table");
-        assert_eq!(mqtt.get("host").and_then(|v| v.as_str()), Some("test.mosquitto.org"));
+
+        let mqtt = table
+            .get("mqtt")
+            .expect("mqtt section missing")
+            .as_table()
+            .expect("mqtt should be a table");
+        assert_eq!(
+            mqtt.get("host").and_then(|v| v.as_str()),
+            Some("test.mosquitto.org")
+        );
         assert_eq!(mqtt.get("port").and_then(|v| v.as_integer()), Some(8883));
         assert_eq!(mqtt.get("tls").and_then(|v| v.as_bool()), Some(true));
 
-        let dashboard = table.get("dashboard").expect("dashboard section missing").as_table().expect("dashboard should be a table");
-        let sections = dashboard.get("sections").expect("sections missing").as_array().expect("sections should be an array");
+        let dashboard = table
+            .get("dashboard")
+            .expect("dashboard section missing")
+            .as_table()
+            .expect("dashboard should be a table");
+        let sections = dashboard
+            .get("sections")
+            .expect("sections missing")
+            .as_array()
+            .expect("sections should be an array");
         assert_eq!(sections.len(), 2);
 
         // 3. Round-trip serialization test
         let serialized = toml::to_string_pretty(&cfg).expect("failed to serialize");
-        let cfg2: AppConfig = toml::from_str(&serialized).expect("failed to re-parse serialized config");
+        let cfg2: AppConfig =
+            toml::from_str(&serialized).expect("failed to re-parse serialized config");
         assert_eq!(cfg.mqtt.host, cfg2.mqtt.host);
         assert_eq!(cfg.mqtt.port, cfg2.mqtt.port);
     }
