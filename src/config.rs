@@ -404,4 +404,60 @@ mod tests {
         let custom_ids = gauge_ids(custom);
         assert_eq!(custom_ids, vec!["x".to_string()]);
     }
+
+    #[test]
+    fn test_toml_1_0_parsing_compliance() {
+        let raw = r#"
+[mqtt]
+host = "test.mosquitto.org"
+port = 8883
+tls = true
+qos = 1
+keepalive_secs = 60
+remember_password = false
+
+[dashboard]
+[[dashboard.sections]]
+id = "overview"
+enabled = true
+gauges = []
+
+[[dashboard.sections]]
+id = "air_quality"
+enabled = true
+[[dashboard.sections.gauges]]
+id = "pm25"
+enabled = true
+"#;
+
+        // 1. Test parsing into the domain struct (AppConfig)
+        let cfg: AppConfig = toml::from_str(raw).expect("failed to parse into AppConfig");
+        assert_eq!(cfg.mqtt.host, "test.mosquitto.org");
+        assert_eq!(cfg.mqtt.port, 8883);
+        assert!(cfg.mqtt.tls);
+        assert_eq!(cfg.mqtt.qos, 1);
+        assert_eq!(cfg.dashboard.sections.len(), 2);
+        assert_eq!(cfg.dashboard.sections[1].id, "air_quality");
+        assert_eq!(cfg.dashboard.sections[1].gauges.len(), 1);
+        assert_eq!(cfg.dashboard.sections[1].gauges[0].id, "pm25");
+
+        // 2. Test parsing into toml::Table to verify structure directly
+        // toml 1.0 uses explicit types (Integer is i64)
+        let table: toml::Table = toml::from_str(raw).expect("failed to parse into toml::Table");
+        
+        let mqtt = table.get("mqtt").expect("mqtt section missing").as_table().expect("mqtt should be a table");
+        assert_eq!(mqtt.get("host").and_then(|v| v.as_str()), Some("test.mosquitto.org"));
+        assert_eq!(mqtt.get("port").and_then(|v| v.as_integer()), Some(8883));
+        assert_eq!(mqtt.get("tls").and_then(|v| v.as_bool()), Some(true));
+
+        let dashboard = table.get("dashboard").expect("dashboard section missing").as_table().expect("dashboard should be a table");
+        let sections = dashboard.get("sections").expect("sections missing").as_array().expect("sections should be an array");
+        assert_eq!(sections.len(), 2);
+
+        // 3. Round-trip serialization test
+        let serialized = toml::to_string_pretty(&cfg).expect("failed to serialize");
+        let cfg2: AppConfig = toml::from_str(&serialized).expect("failed to re-parse serialized config");
+        assert_eq!(cfg.mqtt.host, cfg2.mqtt.host);
+        assert_eq!(cfg.mqtt.port, cfg2.mqtt.port);
+    }
 }
