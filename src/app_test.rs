@@ -3,9 +3,7 @@ mod tests {
     use super::*;
     use crate::app::{Air1App, Metrics, MqttEvent};
     use crate::config;
-    use eframe::egui;
     use std::sync::mpsc;
-    use std::time::Instant;
     
     // Helper function to create a test app
     fn create_test_app() -> Air1App {
@@ -20,8 +18,6 @@ mod tests {
             last_save: None,
             keyring_unavailable: false,
             testing: false,
-            show_error_dialog: false,
-            show_keyring_help: false,
             test_rx,
             test_tx,
             mqtt_rx,
@@ -30,7 +26,6 @@ mod tests {
             connected: false,
             mqtt_handle: None,
             mqtt_stop: None,
-            last_viewport_size: None,
         }
     }
     
@@ -101,15 +96,15 @@ mod tests {
         
         // Good quality
         let color = Air1App::get_quality_color(10.0, ranges);
-        assert_eq!(color, egui::Color32::from_rgb(76, 175, 80));
-        
+        assert_eq!(color, (76u8, 175, 80));
+
         // Moderate quality
         let color = Air1App::get_quality_color(20.0, ranges);
-        assert_eq!(color, egui::Color32::from_rgb(255, 235, 59));
-        
+        assert_eq!(color, (255u8, 235, 59));
+
         // Unhealthy quality
         let color = Air1App::get_quality_color(100.0, ranges);
-        assert_eq!(color, egui::Color32::from_rgb(244, 67, 54));
+        assert_eq!(color, (244u8, 67, 54));
     }
     
     #[test]
@@ -193,17 +188,10 @@ mod tests {
     fn test_availability_calculation() {
         let app = create_test_app();
         
-        // Test different availability scenarios
-        let scenarios = [
-            (false, None, ("offline", egui::Color32::RED)),
-            (true, Some(Instant::now()), ("fresh", egui::Color32::GREEN)),
-            (true, None, ("no data", egui::Color32::YELLOW)),
-        ];
-        
-        for (connected, last_update, expected) in scenarios {
-            // This is a simplified test since we can't easily mock Instant
-            // In a real test, you might want to use a mock or dependency injection
-            assert_eq!(expected.0, expected.0); // Placeholder assertion
+        // Test different availability labels (simplified; Instant is not easily mockable)
+        let labels = ["offline", "fresh", "no data"];
+        for label in labels {
+            assert!(!label.is_empty()); // Placeholder: verifies labels are non-empty strings
         }
     }
 }
