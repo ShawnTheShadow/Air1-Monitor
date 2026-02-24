@@ -11,10 +11,10 @@ before_script:
     if command -v apt-get >/dev/null; then
       echo "Detected Debian-based system. Installing packages with apt-get."
       apt-get update -qq
-      apt-get install -y -qq libdbus-1-dev pkg-config
+      apt-get install -y -qq libdbus-1-dev pkg-config libgtk-4-dev
     elif command -v apk >/dev/null; then
       echo " Detected Alpine-based system. Installing packages with apk."
-      apk add --no-cache dbus-dev pkgconf
+      apk add --no-cache dbus-dev pkgconf gtk4-dev
     else
       echo "Unsupported OS or package manager. Please ensure either apt-get or apk is available."
       exit 1
