@@ -8,6 +8,22 @@ pub enum TestResult {
     Err(String),
 }
 
+#[derive(Copy, Clone, Debug, PartialEq, Eq, Default)]
+pub enum MqttState {
+    #[default]
+    Stopped,
+    Starting,
+    Connected,
+    Reconnecting,
+    Stopping,
+}
+
+impl MqttState {
+    pub fn is_running(self) -> bool {
+        !matches!(self, MqttState::Stopped)
+    }
+}
+
 #[derive(Default, Clone, Debug)]
 pub struct Metrics {
     pub pm1: Option<f64>,
@@ -61,6 +77,7 @@ pub struct Air1App {
     pub mqtt_rx: mpsc::Receiver<MqttEvent>,
     pub mqtt_tx: mpsc::Sender<MqttEvent>,
     pub metrics: Metrics,
+    pub mqtt_state: MqttState,
     pub connected: bool,
     pub mqtt_handle: Option<JoinHandle<()>>,
     pub mqtt_stop: Option<mpsc::Sender<()>>,
@@ -112,6 +129,7 @@ impl Default for Air1App {
             mqtt_rx,
             mqtt_tx,
             metrics: Metrics::default(),
+            mqtt_state: MqttState::Stopped,
             connected: false,
             mqtt_handle: None,
             mqtt_stop: None,
@@ -179,6 +197,7 @@ impl Air1App {
             mqtt_rx,
             mqtt_tx: mqtt_tx.clone(),
             metrics: Metrics::default(),
+            mqtt_state: MqttState::Stopped,
             connected: false,
             mqtt_handle: None,
             mqtt_stop: None,
@@ -237,16 +256,36 @@ impl Air1App {
                 MqttEvent::Connected => {
                     self.status = "MQTT connected".to_string();
                     self.connected = true;
+                    self.mqtt_state = MqttState::Connected;
                 }
                 MqttEvent::Disconnected(err) => {
                     self.status = format!("MQTT disconnected: {err}");
                     self.connected = false;
-                    if let Some(handle) = self.mqtt_handle.take() {
-                        let _ = handle.join();
+
+                    // The listener emits Disconnected on transient failures too.
+                    // Joining here would freeze the UI while reconnect loop runs.
+                    let listener_finished = self
+                        .mqtt_handle
+                        .as_ref()
+                        .is_some_and(std::thread::JoinHandle::is_finished);
+                    if listener_finished {
+                        if let Some(handle) = self.mqtt_handle.take() {
+                            let _ = handle.join();
+                        }
+                        self.mqtt_stop = None;
+                        self.mqtt_state = MqttState::Stopped;
+                    } else {
+                        self.mqtt_state = MqttState::Reconnecting;
                     }
-                    self.mqtt_stop = None;
                 }
                 MqttEvent::Status(msg) => {
+                    if msg == "MQTT stop requested" {
+                        self.mqtt_state = MqttState::Stopping;
+                    } else if msg.starts_with("Reconnecting in ") {
+                        self.mqtt_state = MqttState::Reconnecting;
+                    } else if msg.starts_with("MQTT connected; subs:") {
+                        self.mqtt_state = MqttState::Connected;
+                    }
                     self.status = msg;
                 }
                 MqttEvent::Metric { topic, value, kind } => {
@@ -269,6 +308,7 @@ impl Air1App {
     }
 
     pub fn stop_mqtt(&mut self) {
+        self.mqtt_state = MqttState::Stopping;
         if let Some(stop) = self.mqtt_stop.take() {
             let _ = stop.send(());
         }
@@ -277,6 +317,7 @@ impl Air1App {
             let _ = handle.join();
         }
         self.connected = false;
+        self.mqtt_state = MqttState::Stopped;
         self.status = "MQTT stopped".to_string();
     }
 
@@ -325,6 +366,8 @@ impl Air1App {
         let tx = self.mqtt_tx.clone();
         let (stop_tx, stop_rx) = mpsc::channel();
         self.status = "Starting MQTT listener...".to_string();
+        self.mqtt_state = MqttState::Starting;
+        self.connected = false;
         let handle = std::thread::spawn(move || {
             let _ = mqtt::run_listener(cfg.mqtt, password.as_deref(), tx, stop_rx);
         });

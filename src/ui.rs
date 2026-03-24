@@ -4,7 +4,7 @@ use gtk4::prelude::*;
 use gtk4::{Application, ApplicationWindow};
 use std::{cell::Cell, cell::RefCell, f64::consts::PI, rc::Rc, time::Duration};
 
-use crate::app::Air1App;
+use crate::app::{Air1App, MqttState};
 use crate::config;
 
 // ── Quality ranges ─────────────────────────────────────────────────────────────
@@ -79,11 +79,13 @@ const CSS: &str = r#"
 
 .connection-online  { color: rgb( 76,175, 80); }
 .connection-offline { color: rgb(244, 67, 54); }
+.connection-pending { color: rgb(255, 152, 0); }
 .avail-fresh   { color: rgb( 76,175, 80); }
 .avail-stale   { color: rgb(255,235, 59); }
 .avail-stalled { color: rgb(244, 67, 54); }
 .avail-nodata  { color: rgb(255,235, 59); }
 .avail-offline { color: rgb(150,150,150); }
+.avail-reconnecting { color: rgb(255, 152, 0); }
 
 .warn-label { color: rgb(255,152,0); font-size: 12px; }
 .last-topic { color: rgb(150,150,150); font-style: italic; }
@@ -586,40 +588,43 @@ fn update_widgets(app: &Air1App, w: &AppWidgets) {
     w.details_button.set_sensitive(!app.status.is_empty());
 
     // Start/stop button sensitivity
-    w.start_button.set_sensitive(app.mqtt_handle.is_none());
-    w.stop_button.set_sensitive(app.mqtt_handle.is_some());
+    w.start_button.set_sensitive(!app.mqtt_state.is_running());
+    w.stop_button.set_sensitive(app.mqtt_state.is_running());
 
     // Connection label
-    if app.connected {
-        w.connection_label.set_text("Connection: online");
-        clear_css_classes(
-            &w.connection_label,
-            &["connection-online", "connection-offline"],
-        );
-        w.connection_label.add_css_class("connection-online");
-    } else {
-        w.connection_label.set_text("Connection: offline");
-        clear_css_classes(
-            &w.connection_label,
-            &["connection-online", "connection-offline"],
-        );
-        w.connection_label.add_css_class("connection-offline");
-    }
+    let (conn_text, conn_class) = match app.mqtt_state {
+        MqttState::Connected => ("Connection: online", "connection-online"),
+        MqttState::Starting => ("Connection: starting", "connection-pending"),
+        MqttState::Reconnecting => ("Connection: reconnecting", "connection-pending"),
+        MqttState::Stopping => ("Connection: stopping", "connection-pending"),
+        MqttState::Stopped => ("Connection: offline", "connection-offline"),
+    };
+    w.connection_label.set_text(conn_text);
+    clear_css_classes(
+        &w.connection_label,
+        &["connection-online", "connection-offline", "connection-pending"],
+    );
+    w.connection_label.add_css_class(conn_class);
 
     // Availability
-    let (avail_text, avail_class) = match (app.connected, app.metrics.last_update) {
-        (false, _) => ("offline", "avail-offline"),
-        (true, Some(ts)) => {
-            let age = ts.elapsed().as_secs();
-            if age <= 15 {
-                ("fresh", "avail-fresh")
-            } else if age <= 60 {
-                ("stale", "avail-stale")
-            } else {
-                ("stalled", "avail-stalled")
+    let (avail_text, avail_class) = match app.mqtt_state {
+        MqttState::Connected => match app.metrics.last_update {
+            Some(ts) => {
+                let age = ts.elapsed().as_secs();
+                if age <= 15 {
+                    ("fresh", "avail-fresh")
+                } else if age <= 60 {
+                    ("stale", "avail-stale")
+                } else {
+                    ("stalled", "avail-stalled")
+                }
             }
-        }
-        (true, None) => ("no data", "avail-nodata"),
+            None => ("no data", "avail-nodata"),
+        },
+        MqttState::Starting => ("starting", "avail-reconnecting"),
+        MqttState::Reconnecting => ("reconnecting", "avail-reconnecting"),
+        MqttState::Stopping => ("stopping", "avail-offline"),
+        MqttState::Stopped => ("offline", "avail-offline"),
     };
     w.availability_label
         .set_text(&format!("Availability: {avail_text}"));
@@ -631,6 +636,7 @@ fn update_widgets(app: &Air1App, w: &AppWidgets) {
             "avail-stalled",
             "avail-nodata",
             "avail-offline",
+            "avail-reconnecting",
         ],
     );
     w.availability_label.add_css_class(avail_class);

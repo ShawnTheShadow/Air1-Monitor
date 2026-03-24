@@ -1,9 +1,10 @@
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::app::{Air1App, Metrics, MqttEvent};
+    use crate::app::{Air1App, Metrics, MqttEvent, MqttState};
     use crate::config;
     use std::sync::mpsc;
+    use std::time::{Duration, Instant};
     
     // Helper function to create a test app
     fn create_test_app() -> Air1App {
@@ -23,6 +24,7 @@ mod tests {
             mqtt_rx,
             mqtt_tx,
             metrics: Metrics::default(),
+            mqtt_state: MqttState::Stopped,
             connected: false,
             mqtt_handle: None,
             mqtt_stop: None,
@@ -34,6 +36,7 @@ mod tests {
         let app = Air1App::default();
         assert_eq!(app.status, String::new());
         assert!(!app.connected);
+        assert_eq!(app.mqtt_state, MqttState::Stopped);
         assert!(app.password.is_none());
         assert!(app.metrics.pm25.is_none());
     }
@@ -70,6 +73,7 @@ mod tests {
         app.poll_mqtt();
         
         assert!(!app.connected);
+        assert_eq!(app.mqtt_state, MqttState::Reconnecting);
         assert_eq!(app.status, "MQTT disconnected: Connection lost");
         
         // Test connected state
@@ -78,7 +82,30 @@ mod tests {
         app.poll_mqtt();
         
         assert!(app.connected);
+        assert_eq!(app.mqtt_state, MqttState::Connected);
         assert_eq!(app.status, "MQTT connected");
+    }
+
+    #[test]
+    fn test_disconnected_does_not_block_when_listener_still_running() {
+        let mut app = create_test_app();
+
+        // Simulate an active listener thread that has not finished yet.
+        app.mqtt_handle = Some(std::thread::spawn(|| {
+            std::thread::sleep(Duration::from_secs(2));
+        }));
+
+        app.mqtt_tx
+            .send(MqttEvent::Disconnected("connection closed".to_string()))
+            .unwrap();
+
+        let start = Instant::now();
+        app.poll_mqtt();
+
+        // poll_mqtt should remain responsive and must not wait for listener join.
+        assert!(start.elapsed() < Duration::from_millis(200));
+        assert!(app.mqtt_handle.is_some());
+        assert_eq!(app.mqtt_state, MqttState::Reconnecting);
     }
     
     #[test]
