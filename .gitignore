@@ -22,6 +22,8 @@ config.local.toml
 air1-monitor/.cursorrules
 
 # makepkg build artifacts
+.cargo/config.toml
+vendor/
 pkg/
 *.pkg.tar.zst
 *.pkg.tar.xz
