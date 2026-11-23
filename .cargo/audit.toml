@@ -10,5 +10,4 @@
 # Waiting for rumqttc to update: https://github.com/bytebeamio/rumqtt
 ignore = [
     "RUSTSEC-2025-0134",  # rustls-pemfile (from rumqttc)
-    "RUSTSEC-2024-0436",  # paste (from eframe -> wgpu)
 ]
